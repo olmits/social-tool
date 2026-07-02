@@ -30,10 +30,9 @@ spring:
     baseline-on-migrate: false
     out-of-order: false
 
-  security:
-    oauth2:
-      client:
-        registration: {}
+  # spring.security.oauth2.client.registration entries are added here once the
+  # Reddit OAuth2 flow lands (PLAN.md Phase 2). An empty `registration: {}` map
+  # breaks Boot's property binding, so the key is omitted until then.
 
 management:
   endpoints:
