@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Social Tool — Admin Panel
 
-## Getting Started
+Personal social media management panel. Connect accounts, review and approve AI-generated drafts, schedule posts, and track analytics across Bluesky, Mastodon, and Reddit. Nothing is published without manual approval.
 
-First, run the development server:
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Admin panel (this app) | Next.js |
+| Core API | Java (Spring Boot) |
+| Background workers | Go |
+| Database | PostgreSQL |
+
+This app is UI only — all data operations go through the Java core API.
+
+## Running locally
+
+Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start the dev server:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+The panel requires the Java core API to be running. See the root-level README for instructions on starting the full stack.
 
-To learn more about Next.js, take a look at the following resources:
+## Running with Docker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Start the dev server (hot reload via `pnpm dev`, with file sync/rebuild on changes):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+docker compose up nextjs-dev
+```
 
-## Deploy on Vercel
+Open [http://localhost:3000](http://localhost:3000).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Use `-d` to run it in the background:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+docker compose up -d nextjs-dev
+```
+
+> Use `up`, not `run` — `docker compose run` does not publish the container's ports to the host unless you also pass `--service-ports`.
+
+To build and run the production standalone image instead:
+
+```bash
+docker compose up nextjs-prod-standalone
+```
+
+Stop and remove the containers:
+
+```bash
+docker compose down
+```
