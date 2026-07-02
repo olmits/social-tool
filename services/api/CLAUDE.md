@@ -23,49 +23,6 @@ enqueues approved drafts to SQS; the Go publisher acts on them.
 - Flyway for migrations
 - AWS SDK v2 — Secrets Manager (credentials), SQS (publish queue)
 
-## Commands
-
-```bash
-# Build
-./mvnw clean package -DskipTests
-
-# Run locally (requires local Postgres — see below)
-./mvnw spring-boot:run
-
-# Run tests (spins up Postgres via Testcontainers — requires Docker)
-./mvnw test
-
-# Run a single test class
-./mvnw test -Dtest=DraftServiceTest
-
-# Check dependency resolution
-./mvnw dependency:resolve
-```
-
-## Local development
-
-The app expects a running Postgres instance for `spring-boot:run`.
-Integration tests use Testcontainers and manage their own container — no manual
-setup required for tests, only Docker.
-
-Environment variables required locally (copy from a `.env.local` or export manually):
-
-```
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/socialapi
-SPRING_DATASOURCE_USERNAME=...
-SPRING_DATASOURCE_PASSWORD=...
-```
-
-Credentials for platform adapters and the Claude API are read from AWS Secrets
-Manager at call time in prod. Locally, set them as environment variables:
-
-```
-CLAUDE_API_KEY=...
-BLUESKY_APP_PASSWORD=...
-```
-
-Do not commit credentials. Do not store them in `application.yml`.
-
 ## Package structure
 
 ```
