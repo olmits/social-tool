@@ -34,6 +34,13 @@ spring:
   # Reddit OAuth2 flow lands (PLAN.md Phase 2). An empty `registration: {}` map
   # breaks Boot's property binding, so the key is omitted until then.
 
+social-api:
+  security:
+    # Shared key trusted service callers (admin panel backend, Go workers) send as
+    # X-API-Key. Injected as an env var; in prod that env var is populated from
+    # Secrets Manager via the ECS task definition.
+    api-key: ${API_KEY}
+
 management:
   endpoints:
     web:
