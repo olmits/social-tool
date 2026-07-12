@@ -4,10 +4,10 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -34,7 +34,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String providedApiKey = request.getHeader(API_KEY_HEADER);
         if (providedApiKey != null && matches(providedApiKey, expectedApiKey)) {
-            var authentication = new UsernamePasswordAuthenticationToken(
+            var authentication = new PreAuthenticatedAuthenticationToken(
                     "service", null, AuthorityUtils.createAuthorityList("ROLE_SERVICE"));
             SecurityContext context = SecurityContextHolder.createEmptyContext();
             context.setAuthentication(authentication);

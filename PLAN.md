@@ -90,6 +90,10 @@ Reddit is limited to a single account. Reddit's Responsible Builder Policy (upda
 
 The `status` field on `drafts` is the state machine driving the pipeline.
 
+### Admin panel auth data
+
+User login for the admin panel (NextAuth or similar) lives entirely in Next.js — the Java API is never responsible for authentication (see "Account and auth" above, which covers social platform credentials, not admin-panel users). Next.js's own user/session tables run on the **same RDS Postgres instance** as the tables above, but in a **separate logical database**, so Flyway (owned by the Java API) and whatever migration tool Next.js uses never manage schema in the same place. One instance keeps ops simple at this scale; separate databases keep the two migration histories from colliding.
+
 ## Build phases
 
 **Phase 0 — Foundations.** Repository, database schema, secrets storage, and a single Bluesky adapter. Goal: create a draft and publish it through the code on one platform. Submit the Reddit app for approval at the start of this phase so the review clock runs in parallel.
