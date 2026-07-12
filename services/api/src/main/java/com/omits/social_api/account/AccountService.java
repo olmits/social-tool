@@ -9,25 +9,19 @@ import com.omits.social_api.account.mastodon.MastodonAccountDetailsRepository;
 import com.omits.social_api.account.model.AccountStatus;
 import com.omits.social_api.account.model.ConnectAccountCommand;
 import com.omits.social_api.account.model.Platform;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class AccountService {
 
     private final AccountRepository accountRepository;
     private final MastodonAccountDetailsRepository mastodonAccountDetailsRepository;
     private final CredentialStore credentialStore;
-
-    public AccountService(AccountRepository accountRepository,
-                           MastodonAccountDetailsRepository mastodonAccountDetailsRepository,
-                           CredentialStore credentialStore) {
-        this.accountRepository = accountRepository;
-        this.mastodonAccountDetailsRepository = mastodonAccountDetailsRepository;
-        this.credentialStore = credentialStore;
-    }
 
     public Account connect(ConnectAccountCommand command) {
         validateInstance(command);

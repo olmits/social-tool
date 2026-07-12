@@ -71,9 +71,11 @@ actually mutable after creation (not `id`, not immutable/system-managed
 columns like `createdAt`), and `@NoArgsConstructor(access = AccessLevel.PROTECTED)`
 for the no-arg constructor JPA requires. Write the domain (all-args-minus-id)
 constructor and any `@PrePersist`/`@PreUpdate` lifecycle callbacks by hand —
-Lombok doesn't fit those cleanly. Outside entities (services, controllers,
-DTOs), prefer plain Java/records unless a class has real getter/setter
-boilerplate to remove.
+Lombok doesn't fit those cleanly. On `@Service`/`@Component` classes with only
+`final` constructor-injected fields, use `@RequiredArgsConstructor` instead of
+writing the constructor by hand. Beyond that (controllers, DTOs, anything with
+real logic in its constructor), prefer plain Java/records unless a class has
+real getter/setter boilerplate to remove.
 
 ## Database migrations
 

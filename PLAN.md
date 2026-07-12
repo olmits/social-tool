@@ -65,7 +65,9 @@ flowchart TD
 
 ### Account model
 
-The `accounts` table holds any number of connected accounts. Each row records the platform, the account handle (and instance, for Mastodon), a reference to its stored credential, and a status field. Connecting an account runs that platform's authorization flow and stores the resulting credential; the credential value lives in a secrets store and the row holds only a reference to it. The selected account is a session-level choice that the API uses to pick the right credential when calling an adapter.
+The `accounts` table holds any number of connected accounts. Each row records the platform, the account handle, a reference to its stored credential, and a status field. Connecting an account runs that platform's authorization flow and stores the resulting credential; the credential value lives in a secrets store and the row holds only a reference to it. The selected account is a session-level choice that the API uses to pick the right credential when calling an adapter.
+
+Unlike Bluesky or Reddit, which each expose one central API endpoint, Mastodon is federated: hundreds of independent servers, each its own API endpoint, so a Mastodon account needs an `instance` (its server's domain) to be addressable. That field doesn't belong on `accounts` itself — every Bluesky or Reddit row (and every future non-federated platform) would carry a permanently-null column. Instead, `mastodon_account_details` is a child table, one row per Mastodon account, holding `instance` and keyed by `account_id`. Adding a future federated platform follows the same pattern: its own details table, not a new nullable column on `accounts`.
 
 ### Per-platform support
 
@@ -81,7 +83,8 @@ Reddit is limited to a single account. Reddit's Responsible Builder Policy (upda
 
 | Table | Key fields |
 |---|---|
-| `accounts` | platform, handle, instance, credential_ref, status |
+| `accounts` | platform, handle, credential_ref, status |
+| `mastodon_account_details` | account_id, instance |
 | `signals` | source, raw_payload, topic, score, fetched_at |
 | `drafts` | account_id, signal_id, platform, content, affiliate_links, status, ai_generated, disclosure_included |
 | `posts` | draft_id, account_id, platform, remote_id, published_at |
