@@ -40,6 +40,8 @@ social-api:
     # X-API-Key. Injected as an env var; in prod that env var is populated from
     # Secrets Manager via the ECS task definition.
     api-key: ${API_KEY}
+  aws:
+    region: ${AWS_REGION:us-east-1}
 
 management:
   endpoints:

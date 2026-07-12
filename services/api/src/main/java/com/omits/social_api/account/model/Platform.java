@@ -1,4 +1,4 @@
-package com.omits.social_api.account;
+package com.omits.social_api.account.model;
 
 public enum Platform {
     BLUESKY,

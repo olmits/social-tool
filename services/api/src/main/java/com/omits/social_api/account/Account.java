@@ -1,5 +1,7 @@
 package com.omits.social_api.account;
 
+import com.omits.social_api.account.model.AccountStatus;
+import com.omits.social_api.account.model.Platform;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -46,10 +48,15 @@ public class Account {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private AccountStatus status;
+
     public Account(Platform platform, String handle, String credentialRef) {
         this.platform = platform;
         this.handle = handle;
         this.credentialRef = credentialRef;
+        this.status = AccountStatus.ACTIVE;
     }
 
     @PrePersist
@@ -62,5 +69,9 @@ public class Account {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    public void markDisconnected() {
+        this.status = AccountStatus.DISCONNECTED;
     }
 }
