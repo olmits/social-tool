@@ -65,6 +65,16 @@ publish. It enqueues to SQS. Publishing is the Go worker's responsibility.
 accounts for the same use case. The Reddit adapter is configured for a single
 account; there is no account-switching for Reddit.
 
+**Lombok.** Use Lombok on JPA entities to cut getter/setter/constructor
+boilerplate: `@Getter` at the class level, `@Setter` only on fields that are
+actually mutable after creation (not `id`, not immutable/system-managed
+columns like `createdAt`), and `@NoArgsConstructor(access = AccessLevel.PROTECTED)`
+for the no-arg constructor JPA requires. Write the domain (all-args-minus-id)
+constructor and any `@PrePersist`/`@PreUpdate` lifecycle callbacks by hand —
+Lombok doesn't fit those cleanly. Outside entities (services, controllers,
+DTOs), prefer plain Java/records unless a class has real getter/setter
+boilerplate to remove.
+
 ## Database migrations
 
 Migrations live in `src/main/resources/db/migration/` as plain SQL files,
