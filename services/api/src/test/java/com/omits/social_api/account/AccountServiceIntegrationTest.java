@@ -1,9 +1,9 @@
 package com.omits.social_api.account;
 
 import com.omits.social_api.account.credential.CredentialStore;
+import com.omits.social_api.account.dto.ConnectAccountCommand;
 import com.omits.social_api.account.mastodon.MastodonAccountDetailsRepository;
 import com.omits.social_api.account.model.AccountStatus;
-import com.omits.social_api.account.model.ConnectAccountCommand;
 import com.omits.social_api.account.model.Platform;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

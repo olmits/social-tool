@@ -1,19 +1,22 @@
 package com.omits.social_api.account;
 
 import com.omits.social_api.account.credential.CredentialStore;
+import com.omits.social_api.account.dto.ConnectAccountCommand;
 import com.omits.social_api.account.exception.AccountNotFoundException;
 import com.omits.social_api.account.exception.DuplicateAccountException;
 import com.omits.social_api.account.exception.RedditAccountLimitException;
 import com.omits.social_api.account.mastodon.MastodonAccountDetails;
 import com.omits.social_api.account.mastodon.MastodonAccountDetailsRepository;
 import com.omits.social_api.account.model.AccountStatus;
-import com.omits.social_api.account.model.ConnectAccountCommand;
 import com.omits.social_api.account.model.Platform;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class AccountService {
     private final CredentialStore credentialStore;
 
     public Account connect(ConnectAccountCommand command) {
+        validateNotBlank(command);
         validateInstance(command);
         checkRedditLimit(command);
         checkDuplicate(command);
@@ -57,6 +61,20 @@ public class AccountService {
         credentialStore.delete(account.getCredentialRef());
         account.markDisconnected();
         accountRepository.save(account);
+    }
+
+    public Map<UUID, String> mastodonInstancesByAccountId(Collection<UUID> accountIds) {
+        return mastodonAccountDetailsRepository.findAllById(accountIds).stream()
+                .collect(Collectors.toMap(MastodonAccountDetails::getAccountId, MastodonAccountDetails::getInstance));
+    }
+
+    private static void validateNotBlank(ConnectAccountCommand command) {
+        if (command.handle() == null || command.handle().isBlank()) {
+            throw new IllegalArgumentException("handle must not be blank");
+        }
+        if (command.credentialValue() == null || command.credentialValue().isBlank()) {
+            throw new IllegalArgumentException("credentialValue must not be blank");
+        }
     }
 
     private static void validateInstance(ConnectAccountCommand command) {

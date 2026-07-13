@@ -1,16 +1,18 @@
 package com.omits.social_api.account;
 
 import com.omits.social_api.account.credential.CredentialStore;
+import com.omits.social_api.account.dto.ConnectAccountCommand;
 import com.omits.social_api.account.exception.AccountNotFoundException;
 import com.omits.social_api.account.exception.DuplicateAccountException;
 import com.omits.social_api.account.exception.RedditAccountLimitException;
 import com.omits.social_api.account.mastodon.MastodonAccountDetails;
 import com.omits.social_api.account.mastodon.MastodonAccountDetailsRepository;
 import com.omits.social_api.account.model.AccountStatus;
-import com.omits.social_api.account.model.ConnectAccountCommand;
 import com.omits.social_api.account.model.Platform;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,6 +76,24 @@ class AccountServiceTest {
     void rejectsNonMastodonAccountWithInstance() {
         assertThatThrownBy(() ->
                 accountService.connect(new ConnectAccountCommand(Platform.BLUESKY, "user", "app-password", "mastodon.social")))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(credentialStore, never()).store(anyString());
+    }
+
+    @Test
+    void rejectsBlankHandle() {
+        assertThatThrownBy(() ->
+                accountService.connect(new ConnectAccountCommand(Platform.BLUESKY, " ", "app-password", null)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(credentialStore, never()).store(anyString());
+    }
+
+    @Test
+    void rejectsBlankCredentialValue() {
+        assertThatThrownBy(() ->
+                accountService.connect(new ConnectAccountCommand(Platform.BLUESKY, "user.bsky.social", " ", null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verify(credentialStore, never()).store(anyString());
@@ -144,5 +164,19 @@ class AccountServiceTest {
 
         assertThatThrownBy(() -> accountService.get(accountId))
                 .isInstanceOf(AccountNotFoundException.class);
+    }
+
+    @Test
+    void mastodonInstancesByAccountIdReturnsMapKeyedByAccountId() {
+        UUID mastodonAccountId = UUID.randomUUID();
+        UUID blueskyAccountId = UUID.randomUUID();
+        MastodonAccountDetails details = new MastodonAccountDetails(mastodonAccountId, "mastodon.social");
+        when(mastodonAccountDetailsRepository.findAllById(List.of(mastodonAccountId, blueskyAccountId)))
+                .thenReturn(List.of(details));
+
+        Map<UUID, String> instances =
+                accountService.mastodonInstancesByAccountId(List.of(mastodonAccountId, blueskyAccountId));
+
+        assertThat(instances).containsExactly(Map.entry(mastodonAccountId, "mastodon.social"));
     }
 }
