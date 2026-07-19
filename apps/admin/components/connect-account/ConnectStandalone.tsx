@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ConnectAccountForm } from "./connect-account-form";
+import { ConnectAccountForm } from "./ConnectAccountForm";
 
 /**
  * Full-page connect form — the hard-navigation / refresh / deep-link target for

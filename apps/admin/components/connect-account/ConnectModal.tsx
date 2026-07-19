@@ -9,7 +9,7 @@ import {
   DialogPortal,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ConnectAccountForm } from "./connect-account-form";
+import { ConnectAccountForm } from "./ConnectAccountForm";
 
 /**
  * Intercepting-route modal. Mounted by `@modal/(.)accounts/connect` on soft
