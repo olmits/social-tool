@@ -1,5 +1,6 @@
 package com.omits.social_api.account.credential;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretRequest;
@@ -9,6 +10,7 @@ import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueReques
 import java.util.UUID;
 
 @Component
+@Profile("!local")
 public class SecretsManagerCredentialStore implements CredentialStore {
 
     private static final String SECRET_NAME_PREFIX = "social-api/accounts/";

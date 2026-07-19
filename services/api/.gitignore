@@ -35,3 +35,6 @@ build/
 ### Local dev overrides ###
 src/main/resources/application-local.yml
 .env.local
+
+### Local credential store (LocalCredentialStore, local profile) — plaintext dev secrets ###
+.local-secrets/
