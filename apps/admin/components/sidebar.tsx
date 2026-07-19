@@ -49,7 +49,7 @@ const PLATFORM_ORDER: Platform[] = ["BLUESKY", "MASTODON", "REDDIT"];
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { accounts, selectedId, error } = useAccountState();
+  const { accounts, selectedId } = useAccountState();
   const { selectAccount } = useAccountActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -113,13 +113,6 @@ export function Sidebar() {
           </span>
           <ChevronsUpDown className="size-3.5 text-neutral-400" />
         </button>
-
-        {error && (
-          <div className="mt-2 flex items-start gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">
-            <TriangleAlert className="mt-px size-3 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
 
         {menuOpen && (
           <div className="absolute left-3 right-3 top-[52px] z-40 max-h-[60vh] overflow-auto rounded-xl border border-border bg-popover p-1.5 shadow-lg">
@@ -201,20 +194,14 @@ export function Sidebar() {
             )}
 
             <div className="my-1 border-t border-border" />
-            {/* Gated: POST /accounts needs the API credential store (Secrets
-                Manager), unavailable locally. See API_INTEGRATION_PLAN.md phase 4. */}
-            <button
-              type="button"
-              disabled
-              title="Connecting new accounts is coming soon"
-              className="flex w-full cursor-not-allowed items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] font-medium text-neutral-400 dark:text-neutral-600"
+            <Link
+              href="/accounts/connect"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] font-medium hover:bg-muted"
             >
               <Plus className="size-3.5" />
               Connect account…
-              <span className="ml-auto rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">
-                Soon
-              </span>
-            </button>
+            </Link>
           </div>
         )}
       </div>

@@ -24,39 +24,33 @@ const AccountDispatchContext = createContext<Dispatch<AccountAction> | null>(
 
 export function AccountProvider({
   initialAccounts,
-  initialError = null,
   children,
 }: {
   initialAccounts: UiAccount[];
-  initialError?: string | null;
   children: ReactNode;
 }) {
   const [state, dispatch] = useReducer(
     accountReducer,
-    { initialAccounts, initialError },
-    (arg) => createInitialAccountState(arg.initialAccounts, arg.initialError),
+    initialAccounts,
+    createInitialAccountState,
   );
 
-  // Re-hydrate when the server sends a fresh list (e.g. after a disconnect
+  // Re-hydrate when the server sends a fresh list (e.g. after connect/disconnect
   // revalidates the "accounts" tag). Keyed on content so navigations that pass a
   // new-but-equal array reference don't dispatch needlessly. Skips the first run
   // since useReducer already seeded from these props.
-  const dataKey = `${JSON.stringify(initialAccounts)}|${initialError ?? ""}`;
+  const dataKey = JSON.stringify(initialAccounts);
   const isFirst = useRef(true);
-  // initialAccounts/initialError are intentionally captured via `dataKey` (their
-  // serialized content) rather than by reference, so a new-but-equal array from a
-  // server re-render doesn't re-dispatch.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dataKey encodes both inputs.
+  // initialAccounts is intentionally captured via `dataKey` (its serialized
+  // content) rather than by reference, so a new-but-equal array from a server
+  // re-render doesn't re-dispatch.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataKey encodes the input.
   useEffect(() => {
     if (isFirst.current) {
       isFirst.current = false;
       return;
     }
-    dispatch({
-      type: "hydrate",
-      accounts: initialAccounts,
-      error: initialError,
-    });
+    dispatch({ type: "hydrate", accounts: initialAccounts });
   }, [dataKey]);
 
   return (

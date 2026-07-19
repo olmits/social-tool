@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useAccountDispatch } from "@/context/account-context";
+import type { UiAccount } from "@/lib/api/mappers";
 
 export function useAccountActions() {
   const dispatch = useAccountDispatch();
@@ -11,5 +12,10 @@ export function useAccountActions() {
     [dispatch],
   );
 
-  return { selectAccount };
+  const addAccount = useCallback(
+    (account: UiAccount) => dispatch({ type: "add", account }),
+    [dispatch],
+  );
+
+  return { selectAccount, addAccount };
 }

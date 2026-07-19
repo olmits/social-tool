@@ -5,23 +5,18 @@ export interface AccountState {
   accounts: UiAccount[];
   /** Currently selected account id, or null when there are no accounts. */
   selectedId: string | null;
-  /** Set when the server-side account fetch failed; null on success. */
-  error: string | null;
 }
 
 export type AccountAction =
-  | { type: "hydrate"; accounts: UiAccount[]; error?: string | null }
-  | { type: "select"; id: string };
+  | { type: "hydrate"; accounts: UiAccount[] }
+  | { type: "select"; id: string }
+  | { type: "add"; account: UiAccount };
 
 /** Builds initial state, defaulting the selection to the first account. */
-export function createInitialAccountState(
-  accounts: UiAccount[],
-  error: string | null = null,
-): AccountState {
+export function createInitialAccountState(accounts: UiAccount[]): AccountState {
   return {
     accounts,
     selectedId: accounts[0]?.id ?? null,
-    error,
   };
 }
 
@@ -44,7 +39,15 @@ export function accountReducer(
         selectedId: keepSelection
           ? state.selectedId
           : (accounts[0]?.id ?? null),
-        error: action.error ?? null,
+      };
+    }
+    case "add": {
+      // Optimistically insert + select the just-connected account. The next
+      // server `hydrate` (after updateTag) reconciles it with the canonical list.
+      const exists = state.accounts.some((a) => a.id === action.account.id);
+      return {
+        accounts: exists ? state.accounts : [...state.accounts, action.account],
+        selectedId: action.account.id,
       };
     }
     case "select":
