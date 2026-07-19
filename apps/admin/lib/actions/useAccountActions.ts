@@ -8,8 +8,9 @@ export function useAccountActions() {
   const dispatch = useAccountDispatch();
 
   const setAccount = useCallback(
-    (platform: Platform, account: string) => dispatch({ type: "select", platform, account }),
-    [dispatch]
+    (platform: Platform, account: string) =>
+      dispatch({ type: "select", platform, account }),
+    [dispatch],
   );
 
   return { setAccount };

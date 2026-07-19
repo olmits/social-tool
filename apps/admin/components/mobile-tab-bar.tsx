@@ -1,8 +1,8 @@
 "use client";
 
+import { BarChart3, CalendarDays, ListChecks, Radar } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, ListChecks, Radar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TAB_ITEMS = [
@@ -24,11 +24,18 @@ export function MobileTabBar() {
             href={item.href}
             className={cn(
               "flex w-16 flex-col items-center gap-1 pt-1.5 text-neutral-400 dark:text-neutral-600",
-              active && "text-foreground"
+              active && "text-foreground",
             )}
           >
             <item.icon className="size-[23px]" strokeWidth={active ? 2 : 1.8} />
-            <span className={cn("text-[10px]", active ? "font-semibold" : "font-medium")}>{item.label}</span>
+            <span
+              className={cn(
+                "text-[10px]",
+                active ? "font-semibold" : "font-medium",
+              )}
+            >
+              {item.label}
+            </span>
           </Link>
         );
       })}
