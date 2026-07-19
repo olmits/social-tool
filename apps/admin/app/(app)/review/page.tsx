@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { platformLabel } from "@/lib/api/mappers";
 import {
   DRAFTS,
   type Draft,
@@ -350,8 +351,8 @@ export default function ReviewPage() {
                 {selected.account}
               </div>
               <div className="text-[12.5px] text-muted-foreground">
-                {selected.platform} ·{" "}
-                {selected.platform === "Reddit"
+                {platformLabel(selected.platform)} ·{" "}
+                {selected.platform === "REDDIT"
                   ? "single account"
                   : "switchable"}
               </div>
@@ -398,8 +399,8 @@ export default function ReviewPage() {
               {selected.account}
             </div>
             <div className="text-xs text-muted-foreground">
-              {selected.platform} ·{" "}
-              {selected.platform === "Reddit" ? "single account" : "switchable"}
+              {platformLabel(selected.platform)} ·{" "}
+              {selected.platform === "REDDIT" ? "single account" : "switchable"}
             </div>
           </div>
           <StatusBadge status={selected.status} size="lg" />

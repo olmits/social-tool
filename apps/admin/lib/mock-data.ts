@@ -1,7 +1,8 @@
 // Prototype fixtures for the admin UI. Replace with API calls once the
 // Java core API and Go workers are wired up (see /PLAN.md).
 
-export type Platform = "Bluesky" | "Mastodon" | "Reddit";
+import type { Platform } from "@/lib/types";
+
 export type DraftStatus =
   | "draft"
   | "approved"
@@ -16,27 +17,21 @@ export interface PlatformMeta {
 }
 
 export const PLATFORM_META: Record<Platform, PlatformMeta> = {
-  Bluesky: {
+  BLUESKY: {
     dot: "#0a7aff",
     badgeBg: "bg-blue-50 dark:bg-blue-950/40",
     badgeText: "text-blue-700 dark:text-blue-400",
   },
-  Mastodon: {
+  MASTODON: {
     dot: "#6364ff",
     badgeBg: "bg-indigo-50 dark:bg-indigo-950/40",
     badgeText: "text-indigo-700 dark:text-indigo-400",
   },
-  Reddit: {
+  REDDIT: {
     dot: "#ff4500",
     badgeBg: "bg-orange-50 dark:bg-orange-950/40",
     badgeText: "text-orange-700 dark:text-orange-400",
   },
-};
-
-export const ACCOUNTS_BY_PLATFORM: Record<Platform, string[]> = {
-  Bluesky: ["@maya.dev", "@maya-labs.bsky.social"],
-  Mastodon: ["@maya@fosstodon.org", "@maya@hachyderm.io"],
-  Reddit: ["u/maya_builds"],
 };
 
 export interface StatusMeta {
@@ -234,7 +229,7 @@ export interface Draft {
 export const DRAFTS: Draft[] = [
   {
     id: 1,
-    platform: "Bluesky",
+    platform: "BLUESKY",
     account: "@maya.dev",
     status: "draft",
     meta: "edited 8m ago",
@@ -248,7 +243,7 @@ export const DRAFTS: Draft[] = [
   },
   {
     id: 2,
-    platform: "Mastodon",
+    platform: "MASTODON",
     account: "@maya@fosstodon.org",
     status: "approved",
     meta: "approved 22m ago",
@@ -262,7 +257,7 @@ export const DRAFTS: Draft[] = [
   },
   {
     id: 3,
-    platform: "Bluesky",
+    platform: "BLUESKY",
     account: "@maya.dev",
     status: "scheduled",
     meta: "scheduled Jul 13, 9:00 AM",
@@ -276,7 +271,7 @@ export const DRAFTS: Draft[] = [
   },
   {
     id: 4,
-    platform: "Reddit",
+    platform: "REDDIT",
     account: "u/maya_builds",
     status: "draft",
     meta: "edited 1h ago",
@@ -290,7 +285,7 @@ export const DRAFTS: Draft[] = [
   },
   {
     id: 5,
-    platform: "Mastodon",
+    platform: "MASTODON",
     account: "@maya@hachyderm.io",
     status: "published",
     meta: "published Jul 9, 10:04 AM",
@@ -304,7 +299,7 @@ export const DRAFTS: Draft[] = [
   },
   {
     id: 6,
-    platform: "Bluesky",
+    platform: "BLUESKY",
     account: "@maya.dev",
     status: "failed",
     meta: "failed 2h ago · rate limited",
@@ -339,14 +334,14 @@ export const WEEK: ScheduleDay[] = [
     events: [
       {
         time: "9:00 AM",
-        platform: "Bluesky",
+        platform: "BLUESKY",
         account: "@maya.dev",
         title: "Postgres 17.2 incremental backups keep getting better…",
         status: "scheduled",
       },
       {
         time: "2:30 PM",
-        platform: "Mastodon",
+        platform: "MASTODON",
         account: "@maya@fosstodon.org",
         title: "Right-sizing beats microservices dogma.",
         status: "scheduled",
@@ -359,7 +354,7 @@ export const WEEK: ScheduleDay[] = [
     events: [
       {
         time: "11:00 AM",
-        platform: "Reddit",
+        platform: "REDDIT",
         account: "u/maya_builds",
         title: "Minimal OpenTelemetry setup for Go services",
         status: "approved",
@@ -372,7 +367,7 @@ export const WEEK: ScheduleDay[] = [
     events: [
       {
         time: "8:00 AM",
-        platform: "Bluesky",
+        platform: "BLUESKY",
         account: "@maya.dev",
         title: "Local-first sync is the architecture to copy.",
         status: "scheduled",
@@ -386,14 +381,14 @@ export const WEEK: ScheduleDay[] = [
     events: [
       {
         time: "10:00 AM",
-        platform: "Bluesky",
+        platform: "BLUESKY",
         account: "@maya.dev",
         title: "bun v1.3 removes three dependencies from your project.",
         status: "scheduled",
       },
       {
         time: "1:00 PM",
-        platform: "Mastodon",
+        platform: "MASTODON",
         account: "@maya@hachyderm.io",
         title: "zig 0.14 incremental compilation is worth a weekend.",
         status: "approved",

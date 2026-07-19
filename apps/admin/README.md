@@ -21,6 +21,19 @@ Install dependencies:
 pnpm install
 ```
 
+Configure environment variables — copy the template and fill it in:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Description |
+|---|---|
+| `API_BASE_URL` | Base URL of the Java core API (default `http://localhost:8080`). |
+| `API_KEY` | Shared secret sent as `X-API-Key` on every API call. Local dev value: `local-dev-api-key`. |
+
+> Both are **server-only** — the panel is a BFF: the browser only talks to Next's own origin, and Next attaches the API key when calling the core API. Never prefix these with `NEXT_PUBLIC_`, and never call the API directly from client components. `.env.local` is gitignored.
+
 Start the dev server:
 
 ```bash

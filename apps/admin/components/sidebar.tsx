@@ -6,21 +6,23 @@ import {
   Check,
   ChevronsUpDown,
   ListChecks,
+  Loader2,
   LogOut,
   Plus,
   Radar,
+  TriangleAlert,
+  Unlink,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useAccountState } from "@/context/account-context";
 import { useAccountActions } from "@/lib/actions/useAccountActions";
-import {
-  ACCOUNTS_BY_PLATFORM,
-  PLATFORM_META,
-  type Platform,
-} from "@/lib/mock-data";
+import { disconnectAccountAction } from "@/lib/api/actions";
+import { accountLabel, platformLabel } from "@/lib/api/mappers";
+import { PLATFORM_META } from "@/lib/mock-data";
+import type { Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -41,13 +43,35 @@ const NAV_ITEMS = [
   { href: "/schedule", label: "Scheduling", icon: CalendarDays },
 ];
 
+// Reddit is single-account only (see CLAUDE.md); flagged in the switcher.
+const PLATFORM_ORDER: Platform[] = ["BLUESKY", "MASTODON", "REDDIT"];
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { platform, account } = useAccountState();
-  const { setAccount } = useAccountActions();
+  const { accounts, selectedId, error } = useAccountState();
+  const { selectAccount } = useAccountActions();
   const [menuOpen, setMenuOpen] = useState(false);
-  const selectedMeta = PLATFORM_META[platform];
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const selected = accounts.find((a) => a.id === selectedId) ?? null;
+  const selectedMeta = selected ? PLATFORM_META[selected.platform] : null;
+
+  const grouped = PLATFORM_ORDER.map((platform) => ({
+    platform,
+    accounts: accounts.filter((a) => a.platform === platform),
+  })).filter((group) => group.accounts.length > 0);
+
+  function handleDisconnect(id: string) {
+    setActionError(null);
+    startTransition(async () => {
+      const result = await disconnectAccountAction(id);
+      if (!result.ok) {
+        setActionError(result.message);
+      }
+    });
+  }
 
   return (
     <aside className="hidden h-full w-[258px] shrink-0 flex-col border-r border-border bg-muted/40 md:flex">
@@ -69,75 +93,127 @@ export function Sidebar() {
           <span
             className={cn(
               "flex size-7 shrink-0 items-center justify-center rounded-md",
-              selectedMeta.badgeBg,
+              selectedMeta?.badgeBg ?? "bg-muted",
             )}
           >
             <span
               className="size-2 rounded-full"
-              style={{ background: selectedMeta.dot }}
+              style={{ background: selectedMeta?.dot ?? "#a3a3a3" }}
             />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[12.5px] font-semibold">
-              {account}
+              {selected ? accountLabel(selected) : "No account"}
             </span>
             <span className="block text-[11px] text-muted-foreground">
-              {platform}
+              {selected
+                ? platformLabel(selected.platform)
+                : "Connect one to begin"}
             </span>
           </span>
           <ChevronsUpDown className="size-3.5 text-neutral-400" />
         </button>
 
+        {error && (
+          <div className="mt-2 flex items-start gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">
+            <TriangleAlert className="mt-px size-3 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {menuOpen && (
           <div className="absolute left-3 right-3 top-[52px] z-40 max-h-[60vh] overflow-auto rounded-xl border border-border bg-popover p-1.5 shadow-lg">
-            {(
-              Object.entries(ACCOUNTS_BY_PLATFORM) as [Platform, string[]][]
-            ).map(([p, accounts]) => {
-              const meta = PLATFORM_META[p];
+            {grouped.length === 0 && (
+              <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
+                No accounts connected yet.
+              </div>
+            )}
+
+            {grouped.map(({ platform, accounts: platformAccounts }) => {
+              const meta = PLATFORM_META[platform];
               return (
-                <div key={p}>
+                <div key={platform}>
                   <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
                     <span
                       className="size-1.5 rounded-full"
                       style={{ background: meta.dot }}
                     />
-                    {p}
-                    {accounts.length === 1 && (
+                    {platformLabel(platform)}
+                    {platform === "REDDIT" && (
                       <span className="font-medium normal-case tracking-normal text-neutral-300 dark:text-neutral-600">
                         · single
                       </span>
                     )}
                   </div>
-                  {accounts.map((a) => {
-                    const active = platform === p && account === a;
+                  {platformAccounts.map((account) => {
+                    const active = account.id === selectedId;
                     return (
-                      <button
-                        type="button"
-                        key={a}
-                        onClick={() => {
-                          setAccount(p, a);
-                          setMenuOpen(false);
-                        }}
+                      <div
+                        key={account.id}
                         className={cn(
-                          "mb-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium hover:bg-muted",
+                          "group mb-0.5 flex items-center rounded-md pr-1 hover:bg-muted",
                           active && "bg-muted",
                         )}
                       >
-                        <span className="min-w-0 flex-1 truncate">{a}</span>
-                        {active && <Check className="size-3.5 shrink-0" />}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            selectAccount(account.id);
+                            setMenuOpen(false);
+                          }}
+                          className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-[12.5px] font-medium"
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {accountLabel(account)}
+                          </span>
+                          {account.status === "DISCONNECTED" && (
+                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                              disconnected
+                            </span>
+                          )}
+                          {active && <Check className="size-3.5 shrink-0" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDisconnect(account.id)}
+                          disabled={isPending}
+                          title="Disconnect account"
+                          className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-background hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+                        >
+                          {isPending ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Unlink className="size-3.5" />
+                          )}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
               );
             })}
+
+            {actionError && (
+              <div className="mx-1 mt-1 flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                <TriangleAlert className="mt-px size-3 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
             <div className="my-1 border-t border-border" />
+            {/* Gated: POST /accounts needs the API credential store (Secrets
+                Manager), unavailable locally. See API_INTEGRATION_PLAN.md phase 4. */}
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] font-medium text-neutral-600 hover:bg-muted dark:text-neutral-400"
+              disabled
+              title="Connecting new accounts is coming soon"
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] font-medium text-neutral-400 dark:text-neutral-600"
             >
               <Plus className="size-3.5" />
               Connect account…
+              <span className="ml-auto rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">
+                Soon
+              </span>
             </button>
           </div>
         )}

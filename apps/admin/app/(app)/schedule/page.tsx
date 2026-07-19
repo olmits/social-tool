@@ -162,21 +162,21 @@ export default function SchedulePage() {
           <span className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
             <span
               className="size-2 rounded-full"
-              style={{ background: PLATFORM_META.Bluesky.dot }}
+              style={{ background: PLATFORM_META.BLUESKY.dot }}
             />
             Bluesky
           </span>
           <span className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
             <span
               className="size-2 rounded-full"
-              style={{ background: PLATFORM_META.Mastodon.dot }}
+              style={{ background: PLATFORM_META.MASTODON.dot }}
             />
             Mastodon
           </span>
           <span className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
             <span
               className="size-2 rounded-full"
-              style={{ background: PLATFORM_META.Reddit.dot }}
+              style={{ background: PLATFORM_META.REDDIT.dot }}
             />
             Reddit
           </span>
