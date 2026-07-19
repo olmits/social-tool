@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretRequest;
 import software.amazon.awssdk.services.secretsmanager.model.DeleteSecretRequest;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 
 import java.util.UUID;
 
@@ -26,6 +27,14 @@ public class SecretsManagerCredentialStore implements CredentialStore {
                 .secretString(credentialValue)
                 .build());
         return secretName;
+    }
+
+    @Override
+    public String resolve(String secretRef) {
+        return secretsManagerClient.getSecretValue(GetSecretValueRequest.builder()
+                        .secretId(secretRef)
+                        .build())
+                .secretString();
     }
 
     @Override

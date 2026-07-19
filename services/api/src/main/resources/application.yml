@@ -42,6 +42,10 @@ social-api:
     api-key: ${API_KEY}
   aws:
     region: ${AWS_REGION:us-east-1}
+  bluesky:
+    # PDS host for AT Protocol / XRPC calls. Defaults to the main Bluesky PDS; override for a
+    # self-hosted PDS or a test double.
+    base-url: ${BLUESKY_BASE_URL:https://bsky.social}
 
 management:
   endpoints:
