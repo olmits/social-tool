@@ -37,6 +37,10 @@ import java.util.UUID;
  *
  * <p>{@link #signalId} is nullable: a draft may originate from a trend-radar signal (Phase 2)
  * or be authored from a free-form topic, in which case there is no signal to reference.
+ *
+ * <p>{@link #scheduledAt}, {@link #remoteId}, and {@link #failureReason} are populated by
+ * {@code DraftService} as the draft advances through its later states (scheduled, published,
+ * failed) and are null until the corresponding transition occurs.
  */
 @Entity
 @Table(name = "drafts")
@@ -77,6 +81,18 @@ public class Draft {
     @Setter
     @Column(name = "disclosure_included", nullable = false)
     private boolean disclosureIncluded;
+
+    @Setter(AccessLevel.PACKAGE)
+    @Column(name = "scheduled_at")
+    private Instant scheduledAt;
+
+    @Setter(AccessLevel.PACKAGE)
+    @Column(name = "remote_id")
+    private String remoteId;
+
+    @Setter(AccessLevel.PACKAGE)
+    @Column(name = "failure_reason", columnDefinition = "text")
+    private String failureReason;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
