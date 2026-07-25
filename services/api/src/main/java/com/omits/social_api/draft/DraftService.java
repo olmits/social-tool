@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -97,6 +98,24 @@ public class DraftService {
 
     public Draft get(UUID draftId) {
         return draftRepository.findById(draftId).orElseThrow(() -> new DraftNotFoundException(draftId));
+    }
+
+    /**
+     * Lists drafts, optionally narrowed by account and/or status. Both filters are optional;
+     * omitting both returns every draft. The account filter keeps listings scoped to the
+     * selected account, per the panel's operating model.
+     */
+    public List<Draft> list(UUID accountId, DraftStatus status) {
+        if (accountId != null && status != null) {
+            return draftRepository.findByAccountIdAndStatus(accountId, status);
+        }
+        if (accountId != null) {
+            return draftRepository.findByAccountId(accountId);
+        }
+        if (status != null) {
+            return draftRepository.findByStatus(status);
+        }
+        return draftRepository.findAll();
     }
 
     private static void requireStatus(Draft draft, DraftStatus expected, DraftStatus target) {

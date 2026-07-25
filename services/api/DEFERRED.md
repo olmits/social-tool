@@ -51,3 +51,28 @@ place for the check is the request/validation layer, which doesn't exist yet.
 
 **Acceptance.** Creating a draft for a missing/disconnected account, or with a platform that
 doesn't match the account, returns a clear error instead of a 500 or a silently-saved draft.
+
+---
+
+## 3. No edit endpoint for a draft's content / affiliate links / disclosure
+
+**Current state.** The `drafts` API exposes create, read, list, and the four state transitions,
+but there is **no endpoint to edit a draft's body** after creation — `content`, `affiliateLinks`,
+and `disclosureIncluded` can be set on the entity (public setters) but nothing over HTTP reaches
+them. The review panel is meant to let a human edit a draft (and add the required disclosure)
+before approving it; that path doesn't exist yet.
+
+**Consequence for testing.** The disclosure gate in `DraftService.approve` (affiliate links present
++ `disclosureIncluded = false` -> 422 `DisclosureRequiredException`) is covered by the unit test
+`DraftServiceTest`, but **cannot be exercised through the HTTP API** — there is no way to attach an
+affiliate link or flip the disclosure flag via a request. So `DraftControllerIntegrationTest` has no
+422 case. Once the edit endpoint exists, add that integration case.
+
+**Follow-up.**
+- Add `PATCH /drafts/{id}` accepting an edit command (`content`, `affiliateLinks`,
+  `disclosureIncluded`) and a `DraftService` method to apply it. Decide which statuses allow edits
+  (at minimum `DRAFT`; possibly `APPROVED` with a re-review, likely not `SCHEDULED`/`PUBLISHED`).
+- Add an integration test that sets an affiliate link without disclosure and asserts `approve` -> 422.
+
+**Acceptance.** A draft's body can be edited over HTTP in the allowed states, and the disclosure
+gate is reachable (and tested) end-to-end.
