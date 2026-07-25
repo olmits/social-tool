@@ -20,9 +20,20 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # `local` profile activates LocalCredentialStore (no AWS Secrets Manager) and
+      # pins the dev api-key. The datasource env vars below outrank the localhost
+      # datasource in application-local.yml (OS env > profile yaml), so the app
+      # still talks to the `db` service.
+      SPRING_PROFILES_ACTIVE: local
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/socialapi
       SPRING_DATASOURCE_USERNAME: socialapi
       SPRING_DATASOURCE_PASSWORD: socialapi
+      # LocalCredentialStore writes secret files here. Defaults to ${user.dir}/.local-secrets
+      # (= /app), which the non-root `appuser` can't create — point it at a writable dir.
+      SOCIAL_API_LOCAL_CREDENTIALS_DIR: /tmp/local-secrets
+      # Shared X-API-Key the admin panel / workers must send. Must match the admin
+      # app's API_KEY (apps/admin/.env.local -> local-dev-api-key).
+      API_KEY: ${API_KEY:-local-dev-api-key}
       # Override locally via .env or shell exports:
       # CLAUDE_API_KEY:
       # BLUESKY_APP_PASSWORD:

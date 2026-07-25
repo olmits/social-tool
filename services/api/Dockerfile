@@ -4,10 +4,10 @@ WORKDIR /build
 COPY mvnw ./
 COPY .mvn .mvn
 COPY pom.xml ./
-RUN ./mvnw dependency:go-offline -q
+RUN --mount=type=cache,target=/root/.m2 ./mvnw dependency:go-offline -q
 
 COPY src ./src
-RUN ./mvnw package -DskipTests -q
+RUN --mount=type=cache,target=/root/.m2 ./mvnw package -DskipTests -q
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
