@@ -27,6 +27,51 @@ export interface ConnectAccountCommand {
   instance: string | null;
 }
 
+/**
+ * Draft lifecycle state. Matches the backend enum (UPPERCASE) and is the state
+ * machine that drives the pipeline: `DRAFT → APPROVED → SCHEDULED → PUBLISHED`,
+ * with `FAILED` as the publish-error branch.
+ */
+export type DraftStatus =
+  | "DRAFT"
+  | "APPROVED"
+  | "SCHEDULED"
+  | "PUBLISHED"
+  | "FAILED";
+
+export interface DraftResponse {
+  id: string;
+  accountId: string;
+  /** Source signal (trend radar). Null when authored from a free-form topic. */
+  signalId: string | null;
+  platform: Platform;
+  content: string;
+  /** Affiliate link(s) attached to the post; null when none. */
+  affiliateLinks: string | null;
+  status: DraftStatus;
+  aiGenerated: boolean;
+  disclosureIncluded: boolean;
+  /** ISO-8601 instant the draft is due; set once SCHEDULED, null before. */
+  scheduledAt: string | null;
+  /** Platform's remote post id; set once PUBLISHED, null before. */
+  remoteId: string | null;
+  /** Reason the publish failed; set once FAILED, null otherwise. */
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDraftCommand {
+  accountId: string;
+  platform: Platform;
+  content: string;
+}
+
+export interface ScheduleDraftCommand {
+  /** ISO-8601 instant the draft should publish (e.g. "2026-08-01T12:00:00Z"). */
+  scheduledAt: string;
+}
+
 /** Shape of the API's error body: `{ "message": string }`. */
 export interface ApiErrorBody {
   message: string;

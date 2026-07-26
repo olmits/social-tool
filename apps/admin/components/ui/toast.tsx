@@ -1,7 +1,7 @@
 "use client";
 
 import { Toast } from "@base-ui/react/toast";
-import { CheckCircle2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
 
 /**
  * Global toast manager. Lives outside React so `toastManager.add(...)` can be
@@ -19,7 +19,11 @@ function ToastList() {
       toast={toast}
       className="flex items-start gap-3 rounded-xl border border-border bg-popover p-3 shadow-lg transition-[opacity,transform] duration-200 data-[starting-style]:translate-y-2 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"
     >
-      <CheckCircle2 className="mt-px size-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
+      {toast.type === "error" ? (
+        <AlertCircle className="mt-px size-4 shrink-0 text-destructive" />
+      ) : (
+        <CheckCircle2 className="mt-px size-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
+      )}
       <Toast.Content className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Toast.Title className="text-[13px] font-semibold" />
         <Toast.Description className="text-[12px] text-muted-foreground" />

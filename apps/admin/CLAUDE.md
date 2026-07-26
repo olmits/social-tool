@@ -49,6 +49,12 @@ See `context/account-context.tsx`, `lib/reducers/accountReducer.ts`, and `lib/ac
 - **Business logic lives in custom hooks**, not in component bodies. Data fetching, mutations, form submission handlers, and derived state belong in a `use<Feature>` hook; the component just renders what the hook returns.
 - **Arrow functions for in-body callbacks.** Define handlers/helpers inside a component or hook body as `const foo = () => …`, not `function foo() {}`.
 - **react-hook-form: prefer `useController` over `register`.** Bind inputs through a `useController`-based controlled field component rather than spreading `register(...)`. Reserve `register` for cases `useController` can't express.
+- **Don't assign JSX to a variable to reuse it.** Render the component directly at each usage site — even if that repeats the props. Don't do this:
+  ```tsx
+  const actions = <DraftDetailActions onApprove={onApprove} onDiscard={onDiscard} />;
+  return <>{actions} … {actions}</>;
+  ```
+  Write `<DraftDetailActions … />` inline at each location instead. Reusing a stored JSX element hides that it's a component and obscures where it renders.
 
 ### File naming
 

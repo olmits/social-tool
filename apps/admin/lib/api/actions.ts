@@ -4,7 +4,9 @@ import { updateTag } from "next/cache";
 import type { Platform } from "@/lib/types";
 import { ACCOUNTS_TAG, connectAccount, disconnectAccount } from "./accounts";
 import { ApiError } from "./client";
+import { approveDraft, createDraft, DRAFTS_TAG, scheduleDraft } from "./drafts";
 import { toUiAccount, type UiAccount } from "./mappers";
+import type { CreateDraftCommand, DraftResponse } from "./types";
 
 /** Discriminated result so client callers can render errors without an error boundary. */
 export type ActionResult<T = undefined> =
@@ -63,5 +65,43 @@ export async function connectAccountAction(
     return { ok: true, data: toUiAccount(dto) };
   } catch (err) {
     return toActionError(err, "Failed to connect account.");
+  }
+}
+
+export async function createDraftAction(
+  command: CreateDraftCommand,
+): Promise<ActionResult<DraftResponse>> {
+  try {
+    const draft = await createDraft(command);
+    updateTag(DRAFTS_TAG);
+    return { ok: true, data: draft };
+  } catch (err) {
+    return toActionError(err, "Failed to create draft.");
+  }
+}
+
+export async function approveDraftAction(
+  id: string,
+): Promise<ActionResult<DraftResponse>> {
+  try {
+    const draft = await approveDraft(id);
+    updateTag(DRAFTS_TAG);
+    return { ok: true, data: draft };
+  } catch (err) {
+    // ApiError message carries the backend reason (e.g. the 422 disclosure text).
+    return toActionError(err, "Failed to approve draft.");
+  }
+}
+
+export async function scheduleDraftAction(
+  id: string,
+  scheduledAt: string,
+): Promise<ActionResult<DraftResponse>> {
+  try {
+    const draft = await scheduleDraft(id, { scheduledAt });
+    updateTag(DRAFTS_TAG);
+    return { ok: true, data: draft };
+  } catch (err) {
+    return toActionError(err, "Failed to schedule draft.");
   }
 }
