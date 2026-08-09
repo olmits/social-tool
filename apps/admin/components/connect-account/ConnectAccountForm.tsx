@@ -1,8 +1,8 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import { ControlledTextField } from "@/components/form/ControlledTextField";
 import { Button } from "@/components/ui/button";
-import { ControlledTextField } from "./ControlledTextField";
 import { CredentialField } from "./CredentialField";
 import { FormError } from "./FormError";
 import { PlatformPicker } from "./PlatformPicker";

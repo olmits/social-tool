@@ -30,49 +30,46 @@ the draft only so `markPublished` had somewhere to write it before that table ex
 
 ---
 
-## 2. `DraftService.create` does not validate the account
+## 2. A `SCHEDULED` draft cannot be un-scheduled — it has no way back
 
-**Current state.** `create(accountId, platform, content)` saves a draft without checking that
-the account exists or is still connected (`ACTIVE`). The `fk_drafts_account` foreign key rejects
-a non-existent `accountId`, but surfaces as a generic 500 rather than a clean error, and does
-**not** catch a *disconnected* account at all.
+**Current state.** `DraftService` exposes no `SCHEDULED -> APPROVED` transition, and both
+`edit` and `discard` reject `SCHEDULED` (they allow `DRAFT` and `APPROVED` only). A scheduled
+draft's only exits are `markPublished` and `markFailed`, both of which are Go-publisher
+callbacks. So once you schedule a draft, you cannot change its content, cancel it, or move its
+publish time — and since the Go publisher does not exist yet, nothing moves it out of
+`SCHEDULED` at all.
 
-**Why this is interim.** A proper check means `DraftService` loading the account and inspecting
-its status, which couples the `draft` slice to the `account` slice. We've deliberately kept
-these decoupled (reference other aggregates by id, don't hold object references). The natural
-place for the check is the request/validation layer, which doesn't exist yet.
+**Why this is interim.** Freezing a draft at `SCHEDULED` is deliberate and should stay:
+approval attests to specific content (the disclosure gate in `approve()` would otherwise be
+bypassable by editing an already-approved, already-queued draft), and once the publisher owns
+the item, an in-place edit races with a worker that may have already read it. The gap is not
+the freeze — it is that there is no *supported* way to take a draft back out of the queue
+before that freeze applies. The transition was left out because the queue it would coordinate
+with does not exist yet, so there was nothing to define "safe to reclaim" against.
 
-**Follow-up (when the `POST /drafts` endpoint lands).**
-- Validate at the controller/service boundary that the target account exists and is `ACTIVE`
-  before creating a draft (e.g. via `AccountService.get`), returning a clean 404/409.
-- Also validate that the draft's `platform` matches the account's `platform`.
-- Decide where this lives so the slices stay decoupled (controller orchestration, or an
-  explicit application service), rather than injecting the account repository into `DraftService`.
+**Follow-up.**
+- Add `DraftService.unschedule(draftId)`: `SCHEDULED -> APPROVED`, clearing `scheduled_at`.
+  Edit and discard then become reachable again through the rules already in place — no change
+  to their allowed-status sets.
+- Expose it as `PATCH /drafts/{id}/unschedule`, alongside the other transition routes.
+- Wire the panel: an "Unschedule" action on a `SCHEDULED` draft (`DraftDetailActions` currently
+  disables every button in that state), and consider making it the entry point for "reschedule"
+  rather than adding a separate transition.
+- **Once the publisher lands**, guard against reclaiming an item the worker has already
+  claimed from SQS — otherwise unschedule races with publish and the post goes out anyway.
+  Decide whether that is a status check, a claim/lease column, or a conditional queue delete.
 
-**Acceptance.** Creating a draft for a missing/disconnected account, or with a platform that
-doesn't match the account, returns a clear error instead of a 500 or a silently-saved draft.
+**Acceptance.** A scheduled draft can be returned to `APPROVED` and then edited, discarded, or
+re-scheduled; the transition cannot silently cancel a publish that is already in flight.
 
 ---
 
-## 3. No edit endpoint for a draft's content / affiliate links / disclosure
+## Resolved
 
-**Current state.** The `drafts` API exposes create, read, list, and the four state transitions,
-but there is **no endpoint to edit a draft's body** after creation — `content`, `affiliateLinks`,
-and `disclosureIncluded` can be set on the entity (public setters) but nothing over HTTP reaches
-them. The review panel is meant to let a human edit a draft (and add the required disclosure)
-before approving it; that path doesn't exist yet.
+- **Account validation on draft create** — `DraftCreationService` now checks the account
+  exists, is `ACTIVE`, and matches the draft's platform before delegating to `DraftService`.
+- **Draft edit endpoint** — `PATCH /drafts/{id}` replaces `content` / `affiliateLinks` /
+  `disclosureIncluded` in `DRAFT` or `APPROVED` (editing an approved draft reverts it to
+  `DRAFT`). The disclosure gate is now reachable over HTTP and covered by
+  `DraftControllerIntegrationTest.approveWithAffiliateLinkAndNoDisclosureReturns422`.
 
-**Consequence for testing.** The disclosure gate in `DraftService.approve` (affiliate links present
-+ `disclosureIncluded = false` -> 422 `DisclosureRequiredException`) is covered by the unit test
-`DraftServiceTest`, but **cannot be exercised through the HTTP API** — there is no way to attach an
-affiliate link or flip the disclosure flag via a request. So `DraftControllerIntegrationTest` has no
-422 case. Once the edit endpoint exists, add that integration case.
-
-**Follow-up.**
-- Add `PATCH /drafts/{id}` accepting an edit command (`content`, `affiliateLinks`,
-  `disclosureIncluded`) and a `DraftService` method to apply it. Decide which statuses allow edits
-  (at minimum `DRAFT`; possibly `APPROVED` with a re-review, likely not `SCHEDULED`/`PUBLISHED`).
-- Add an integration test that sets an affiliate link without disclosure and asserts `approve` -> 422.
-
-**Acceptance.** A draft's body can be edited over HTTP in the allowed states, and the disclosure
-gate is reachable (and tested) end-to-end.

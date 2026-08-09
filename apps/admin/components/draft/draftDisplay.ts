@@ -36,6 +36,11 @@ export const STATUS_META: Record<DraftStatus, StatusMeta> = {
     badgeText: "text-red-700 dark:text-red-400",
     dot: "bg-red-500",
   },
+  DISCARDED: {
+    badgeBg: "bg-muted",
+    badgeText: "text-muted-foreground line-through",
+    dot: "bg-neutral-300 dark:bg-neutral-600",
+  },
 };
 
 export const STATE_MACHINE_STEPS = [
@@ -85,6 +90,8 @@ export function draftMeta(draft: DraftResponse): string {
       return draft.failureReason ? `failed · ${draft.failureReason}` : "failed";
     case "APPROVED":
       return `approved ${formatUtc(draft.updatedAt)}`;
+    case "DISCARDED":
+      return `discarded ${formatUtc(draft.updatedAt)}`;
     default:
       return `edited ${formatUtc(draft.updatedAt)}`;
   }

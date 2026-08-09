@@ -23,7 +23,9 @@ This app is a UI only. All data operations go through the Java (Spring Boot) cor
 
 ## Draft state machine
 
-`draft → approved → scheduled → published → failed`
+`draft → approved → scheduled → published`, with `failed` as the publish-error branch. During
+review, editing an `approved` draft reverts it to `draft`, and discarding a `draft`/`approved`
+one moves it to the terminal `discarded` (kept, not deleted; hidden from the "All" filter).
 
 ## Platforms
 

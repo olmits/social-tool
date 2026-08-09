@@ -3,18 +3,24 @@
 import {
   type Control,
   type FieldPath,
+  type FieldValues,
   type RegisterOptions,
   useController,
 } from "react-hook-form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { ConnectFormValues } from "./useConnectAccountForm";
 
 /**
  * A single text input bound to react-hook-form via `useController` (the preferred
  * binding over `register`). Renders the label/error chrome through `Field`.
+ *
+ * Generic over the form's value type so any form can use it — see
+ * `connect-account/ConnectAccountForm` and `review/EditDraftDialog`.
  */
-export function ControlledTextField<Name extends FieldPath<ConnectFormValues>>({
+export function ControlledTextField<
+  TFieldValues extends FieldValues,
+  Name extends FieldPath<TFieldValues>,
+>({
   control,
   name,
   label,
@@ -22,12 +28,12 @@ export function ControlledTextField<Name extends FieldPath<ConnectFormValues>>({
   placeholder,
   rules,
 }: {
-  control: Control<ConnectFormValues>;
+  control: Control<TFieldValues>;
   name: Name;
   label: string;
   hint?: string;
   placeholder?: string;
-  rules?: RegisterOptions<ConnectFormValues, Name>;
+  rules?: RegisterOptions<TFieldValues, Name>;
 }) {
   const { field, fieldState } = useController({ control, name, rules });
 
@@ -46,6 +52,7 @@ export function ControlledTextField<Name extends FieldPath<ConnectFormValues>>({
         placeholder={placeholder}
         aria-invalid={fieldState.error ? true : undefined}
         {...field}
+        value={field.value ?? ""}
       />
     </Field>
   );

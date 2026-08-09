@@ -30,14 +30,16 @@ export interface ConnectAccountCommand {
 /**
  * Draft lifecycle state. Matches the backend enum (UPPERCASE) and is the state
  * machine that drives the pipeline: `DRAFT → APPROVED → SCHEDULED → PUBLISHED`,
- * with `FAILED` as the publish-error branch.
+ * with `FAILED` as the publish-error branch and `DISCARDED` as the terminal state
+ * for a draft rejected during review.
  */
 export type DraftStatus =
   | "DRAFT"
   | "APPROVED"
   | "SCHEDULED"
   | "PUBLISHED"
-  | "FAILED";
+  | "FAILED"
+  | "DISCARDED";
 
 export interface DraftResponse {
   id: string;
@@ -65,6 +67,17 @@ export interface CreateDraftCommand {
   accountId: string;
   platform: Platform;
   content: string;
+}
+
+/**
+ * The editable body of a draft. A **full replace**, not a sparse patch: a null
+ * `affiliateLinks` clears them rather than leaving them unchanged, so always send
+ * all three fields.
+ */
+export interface EditDraftCommand {
+  content: string;
+  affiliateLinks: string | null;
+  disclosureIncluded: boolean;
 }
 
 export interface ScheduleDraftCommand {

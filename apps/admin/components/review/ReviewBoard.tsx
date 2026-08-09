@@ -9,6 +9,8 @@ import type { DraftResponse } from "@/lib/api/types";
 import { PLATFORM_META } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { ComposeDraft } from "./ComposeDraft";
+import { DiscardDraftDialog } from "./DiscardDraftDialog";
+import { EditDraftDialog } from "./EditDraftDialog";
 import { REVIEW_STATUS_TABS } from "./reviewMeta";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { useReviewBoard } from "./useReviewBoard";
@@ -16,6 +18,8 @@ import { useReviewMutations } from "./useReviewMutations";
 
 export function ReviewBoard({ drafts }: { drafts: DraftResponse[] }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const {
     hasAccount,
     filter,
@@ -27,7 +31,7 @@ export function ReviewBoard({ drafts }: { drafts: DraftResponse[] }) {
     selectSignal,
     accountNames,
   } = useReviewBoard(drafts);
-  const { approve, schedule, pending } = useReviewMutations();
+  const { approve, schedule, edit, discard, pending } = useReviewMutations();
 
   if (!hasAccount) {
     return (
@@ -37,8 +41,11 @@ export function ReviewBoard({ drafts }: { drafts: DraftResponse[] }) {
     );
   }
 
-  // Approve applies only to DRAFT, schedule only to APPROVED — guarded here (the
-  // backend enforces it too).
+  // Approve applies only to DRAFT, schedule only to APPROVED, and edit/discard to
+  // either — guarded here (the backend enforces it too).
+  const inReview =
+    selected?.status === "DRAFT" || selected?.status === "APPROVED";
+
   const onApprove = () => {
     if (selected?.status === "DRAFT") {
       approve(selected.id);
@@ -48,6 +55,18 @@ export function ReviewBoard({ drafts }: { drafts: DraftResponse[] }) {
   const onSchedule = () => {
     if (selected?.status === "APPROVED") {
       setScheduleOpen(true);
+    }
+  };
+
+  const onEdit = () => {
+    if (inReview) {
+      setEditOpen(true);
+    }
+  };
+
+  const onDiscard = () => {
+    if (inReview) {
+      setDiscardOpen(true);
     }
   };
 
@@ -156,6 +175,8 @@ export function ReviewBoard({ drafts }: { drafts: DraftResponse[] }) {
         pending={pending}
         onApprove={onApprove}
         onSchedule={onSchedule}
+        onEdit={inReview ? onEdit : undefined}
+        onDiscard={inReview ? onDiscard : undefined}
       />
 
       <ScheduleDialog
@@ -165,6 +186,31 @@ export function ReviewBoard({ drafts }: { drafts: DraftResponse[] }) {
         onConfirm={(scheduledAt) => {
           if (selected) schedule(selected.id, scheduledAt);
           setScheduleOpen(false);
+        }}
+      />
+
+      {/* Keyed on the draft so the form re-seeds its defaults on a new selection. */}
+      {selected && (
+        <EditDraftDialog
+          key={selected.id}
+          draft={selected}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          pending={pending}
+          onConfirm={(command) => {
+            edit(selected.id, command);
+            setEditOpen(false);
+          }}
+        />
+      )}
+
+      <DiscardDraftDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        pending={pending}
+        onConfirm={() => {
+          if (selected) discard(selected.id);
+          setDiscardOpen(false);
         }}
       />
     </div>

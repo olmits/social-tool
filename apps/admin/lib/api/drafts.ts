@@ -3,6 +3,7 @@ import type {
   CreateDraftCommand,
   DraftResponse,
   DraftStatus,
+  EditDraftCommand,
   ScheduleDraftCommand,
 } from "./types";
 
@@ -44,6 +45,31 @@ export function createDraft(
   return apiFetch<DraftResponse>("/drafts", {
     method: "POST",
     body: command,
+  });
+}
+
+/**
+ * `PATCH /drafts/{id}`. Replaces the draft's editable body. 404 if not found,
+ * 409 if the draft has left review (`SCHEDULED` onwards), 400 on blank content.
+ * Editing an `APPROVED` draft returns it in `DRAFT` — the API re-opens it for review.
+ */
+export function editDraft(
+  id: string,
+  command: EditDraftCommand,
+): Promise<DraftResponse> {
+  return apiFetch<DraftResponse>(`/drafts/${id}`, {
+    method: "PATCH",
+    body: command,
+  });
+}
+
+/**
+ * `PATCH /drafts/{id}/discard`. 404 if not found, 409 unless the draft is in
+ * `DRAFT` or `APPROVED`.
+ */
+export function discardDraft(id: string): Promise<DraftResponse> {
+  return apiFetch<DraftResponse>(`/drafts/${id}/discard`, {
+    method: "PATCH",
   });
 }
 

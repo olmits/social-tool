@@ -6,22 +6,22 @@ import { Button } from "@/components/ui/button";
 interface DraftDetailActionsProps {
   onApprove?: () => void;
   onSchedule?: () => void;
-  onSaveEdits?: () => void;
+  onEdit?: () => void;
   onDiscard?: () => void;
   /** Disables all buttons while a mutation is in flight. */
   pending?: boolean;
 }
 
 /**
- * Action row for a draft: discard / save edits / schedule / approve. A button is
- * disabled when its handler is absent — either because the action doesn't apply
- * to the draft's current state (approve/schedule) or the backend endpoint doesn't
- * exist yet (save/discard — see services/api/DEFERRED.md) — or while `pending`.
+ * Action row for a draft: discard / edit / schedule / approve. A button is
+ * disabled when its handler is absent, which means the action doesn't apply to
+ * the draft's current state (edit and discard need `DRAFT` or `APPROVED`, approve
+ * needs `DRAFT`, schedule needs `APPROVED`) — or while `pending`.
  */
 export function DraftDetailActions({
   onApprove,
   onSchedule,
-  onSaveEdits,
+  onEdit,
   onDiscard,
   pending,
 }: DraftDetailActionsProps) {
@@ -36,12 +36,8 @@ export function DraftDetailActions({
         Discard
       </Button>
       <div className="flex-1" />
-      <Button
-        variant="outline"
-        onClick={onSaveEdits}
-        disabled={pending || !onSaveEdits}
-      >
-        Save edits
+      <Button variant="outline" onClick={onEdit} disabled={pending || !onEdit}>
+        Edit
       </Button>
       <Button
         variant="outline"

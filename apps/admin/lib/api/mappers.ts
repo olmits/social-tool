@@ -79,6 +79,7 @@ const DRAFT_STATUS_LABELS: Record<DraftStatus, string> = {
   SCHEDULED: "Scheduled",
   PUBLISHED: "Published",
   FAILED: "Failed",
+  DISCARDED: "Discarded",
 };
 
 /** Human-friendly status label, e.g. `"DRAFT"` → `"Draft"`. */

@@ -3,7 +3,11 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { DraftResponse } from "@/lib/api/types";
-import { REVIEW_STATUS_TABS, type ReviewFilter } from "./reviewMeta";
+import {
+  HIDDEN_FROM_ALL,
+  REVIEW_STATUS_TABS,
+  type ReviewFilter,
+} from "./reviewMeta";
 import { useReviewAccounts } from "./useReviewAccounts";
 
 function isReviewFilter(value: string | null): value is ReviewFilter {
@@ -39,20 +43,25 @@ export function useReviewBoard(drafts: DraftResponse[]) {
     ? statusParam
     : "ALL";
 
+  const queuedDrafts = useMemo(
+    () => accountDrafts.filter((draft) => draft.status !== HIDDEN_FROM_ALL),
+    [accountDrafts],
+  );
+
   const counts = useMemo(() => {
-    const result: Record<string, number> = { ALL: accountDrafts.length };
+    const result: Record<string, number> = { ALL: queuedDrafts.length };
     for (const draft of accountDrafts) {
       result[draft.status] = (result[draft.status] ?? 0) + 1;
     }
     return result;
-  }, [accountDrafts]);
+  }, [accountDrafts, queuedDrafts]);
 
   const filteredDrafts = useMemo(
     () =>
       filter === "ALL"
-        ? accountDrafts
+        ? queuedDrafts
         : accountDrafts.filter((draft) => draft.status === filter),
-    [accountDrafts, filter],
+    [accountDrafts, queuedDrafts, filter],
   );
 
   // Fall back to the first draft when nothing is selected or the selection was

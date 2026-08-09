@@ -7,6 +7,7 @@ import {
   draftHasAffiliate,
   draftLimit,
   STATE_MACHINE_STEPS,
+  type StateStep,
 } from "./draftDisplay";
 
 /**
@@ -15,13 +16,15 @@ import {
  * — the header and action buttons are separate components.
  */
 export function DraftDetail({ draft }: { draft: DraftResponse }) {
-  // FAILED isn't a step on the DRAFT→PUBLISHED track; show progress up to SCHEDULED.
-  const curIdx = Math.max(
-    0,
-    STATE_MACHINE_STEPS.indexOf(
-      draft.status === "FAILED" ? "SCHEDULED" : draft.status,
-    ),
-  );
+  // FAILED and DISCARDED are branches off the DRAFT→PUBLISHED track: a failed draft
+  // got as far as SCHEDULED, a discarded one never left review.
+  const trackStatus: StateStep =
+    draft.status === "FAILED"
+      ? "SCHEDULED"
+      : draft.status === "DISCARDED"
+        ? "DRAFT"
+        : draft.status;
+  const curIdx = STATE_MACHINE_STEPS.indexOf(trackStatus);
 
   const chars = draftChars(draft);
   const limit = draftLimit(draft);

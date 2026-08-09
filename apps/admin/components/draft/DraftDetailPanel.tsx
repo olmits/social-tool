@@ -22,7 +22,7 @@ interface DraftDetailPanelProps {
   selectSignal: number;
   onApprove?: () => void;
   onSchedule?: () => void;
-  onSaveEdits?: () => void;
+  onEdit?: () => void;
   onDiscard?: () => void;
   /** Disables the action buttons while a mutation is in flight. */
   pending?: boolean;
@@ -39,7 +39,7 @@ export function DraftDetailPanel({
   selectSignal,
   onApprove,
   onSchedule,
-  onSaveEdits,
+  onEdit,
   onDiscard,
   pending,
 }: DraftDetailPanelProps) {
@@ -74,7 +74,7 @@ export function DraftDetailPanel({
             <DraftDetailActions
               onApprove={onApprove}
               onSchedule={onSchedule}
-              onSaveEdits={onSaveEdits}
+              onEdit={onEdit}
               onDiscard={onDiscard}
               pending={pending}
             />
@@ -103,7 +103,7 @@ export function DraftDetailPanel({
                 <DraftDetailActions
                   onApprove={onApprove}
                   onSchedule={onSchedule}
-                  onSaveEdits={onSaveEdits}
+                  onEdit={onEdit}
                   onDiscard={onDiscard}
                   pending={pending}
                 />

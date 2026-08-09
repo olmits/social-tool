@@ -11,8 +11,8 @@ import {
   DialogPortal,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { accountLabel, platformLabel } from "@/lib/api/mappers";
-import { cn } from "@/lib/utils";
 import { useComposeDraft } from "./useComposeDraft";
 
 /** "New draft" button + compose dialog for the selected account. */
@@ -38,16 +38,11 @@ export function ComposeDraft() {
                   : "Select an account first."}
               </DialogDescription>
             </div>
-            <textarea
+            <Textarea
               value={content}
               onChange={(event) => setContent(event.target.value)}
               rows={6}
               placeholder="What do you want to post?"
-              className={cn(
-                "w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-[13.5px] outline-none transition-colors",
-                "placeholder:text-muted-foreground",
-                "focus:border-neutral-400 focus:ring-3 focus:ring-ring/20 dark:focus:border-neutral-500",
-              )}
             />
             <div className="mt-5 flex justify-end gap-2.5">
               <Button variant="outline" onClick={() => setOpen(false)}>
