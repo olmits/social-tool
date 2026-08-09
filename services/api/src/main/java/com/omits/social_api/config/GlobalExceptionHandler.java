@@ -1,5 +1,6 @@
 package com.omits.social_api.config;
 
+import com.omits.social_api.account.exception.AccountNotActiveException;
 import com.omits.social_api.account.exception.AccountNotFoundException;
 import com.omits.social_api.account.exception.DuplicateAccountException;
 import com.omits.social_api.account.exception.RedditAccountLimitException;
@@ -7,6 +8,7 @@ import com.omits.social_api.adapter.exception.PlatformApiException;
 import com.omits.social_api.draft.exception.DisclosureRequiredException;
 import com.omits.social_api.draft.exception.DraftNotFoundException;
 import com.omits.social_api.draft.exception.InvalidStateTransitionException;
+import com.omits.social_api.draft.exception.PlatformMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,7 +23,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({DuplicateAccountException.class, RedditAccountLimitException.class,
-            InvalidStateTransitionException.class})
+            InvalidStateTransitionException.class, AccountNotActiveException.class,
+            PlatformMismatchException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
     }

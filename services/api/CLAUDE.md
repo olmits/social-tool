@@ -51,8 +51,16 @@ Secrets Manager secret name). The adapter fetches the actual value from Secrets
 Manager at call time. Locally, fall back to environment variables.
 
 **Draft state machine.** State transitions are enforced in `DraftService`.
-The only valid sequence is `draft → approved → scheduled → published → failed`.
-No component other than `DraftService` should write to `drafts.status`.
+The happy path is `draft → approved → scheduled → published`, with `failed` as the
+publish-error branch off `scheduled`. Two branches leave that track during review:
+editing an `approved` draft reverts it to `draft`, and `discard` moves a `draft` or
+`approved` draft to the terminal `discarded`. No component other than `DraftService`
+should write to `drafts.status`.
+
+**Cross-slice composition.** Domain services reference other aggregates by id and must
+not inject another slice's service or repository. When an operation genuinely needs two
+slices, put the orchestration in an application service — see `DraftCreationService`,
+which validates the account before delegating to `DraftService.create`.
 
 **Disclosure flag.** Any draft containing an affiliate link must have
 `disclosure_included = true` before it can be approved. This is enforced in

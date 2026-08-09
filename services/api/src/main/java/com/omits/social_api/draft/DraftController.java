@@ -2,6 +2,7 @@ package com.omits.social_api.draft;
 
 import com.omits.social_api.draft.dto.CreateDraftCommand;
 import com.omits.social_api.draft.dto.DraftResponse;
+import com.omits.social_api.draft.dto.EditDraftCommand;
 import com.omits.social_api.draft.dto.FailDraftCommand;
 import com.omits.social_api.draft.dto.PublishDraftCommand;
 import com.omits.social_api.draft.dto.ScheduleDraftCommand;
@@ -27,6 +28,7 @@ import java.util.UUID;
 public class DraftController {
 
     private final DraftService draftService;
+    private final DraftCreationService draftCreationService;
 
     @GetMapping
     public List<DraftResponse> list(@RequestParam(required = false) UUID accountId,
@@ -41,9 +43,22 @@ public class DraftController {
 
     @PostMapping
     public ResponseEntity<DraftResponse> create(@RequestBody CreateDraftCommand command) {
-        Draft draft = draftService.create(command.accountId(), command.platform(), command.content());
+        Draft draft = draftCreationService.create(command);
         return ResponseEntity.created(URI.create("/drafts/" + draft.getId()))
                 .body(DraftResponse.from(draft));
+    }
+
+    // Replaces the whole editable body — see EditDraftCommand. Editing an approved draft
+    // sends it back to DRAFT for re-review.
+    @PatchMapping("/{id}")
+    public DraftResponse edit(@PathVariable UUID id, @RequestBody EditDraftCommand command) {
+        return DraftResponse.from(draftService.edit(
+                id, command.content(), command.affiliateLinks(), command.disclosureIncluded()));
+    }
+
+    @PatchMapping("/{id}/discard")
+    public DraftResponse discard(@PathVariable UUID id) {
+        return DraftResponse.from(draftService.discard(id));
     }
 
     @PatchMapping("/{id}/approve")

@@ -62,6 +62,119 @@ class DraftServiceTest {
         verify(draftRepository, never()).save(any());
     }
 
+    // --- edit -------------------------------------------------------------------
+
+    @Test
+    void editsDraftBody() {
+        stubSaveEchoesArgument();
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.DRAFT);
+
+        Draft draft = draftService.edit(draftId, "revised", "https://example.com/ref?tag=me", true);
+
+        assertThat(draft.getContent()).isEqualTo("revised");
+        assertThat(draft.getAffiliateLinks()).isEqualTo("https://example.com/ref?tag=me");
+        assertThat(draft.isDisclosureIncluded()).isTrue();
+        assertThat(draft.getStatus()).isEqualTo(DraftStatus.DRAFT);
+    }
+
+    @Test
+    void editClearsAffiliateLinksWhenNull() {
+        stubSaveEchoesArgument();
+        UUID draftId = UUID.randomUUID();
+        Draft existing = existingDraft(draftId, DraftStatus.DRAFT);
+        existing.setAffiliateLinks("https://example.com/ref?tag=me");
+
+        Draft draft = draftService.edit(draftId, "revised", null, false);
+
+        assertThat(draft.getAffiliateLinks()).isNull();
+    }
+
+    @Test
+    void editRevertsApprovedDraftToDraftForReReview() {
+        stubSaveEchoesArgument();
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.APPROVED);
+
+        Draft draft = draftService.edit(draftId, "revised after approval", null, false);
+
+        assertThat(draft.getStatus()).isEqualTo(DraftStatus.DRAFT);
+        assertThat(draft.getContent()).isEqualTo("revised after approval");
+    }
+
+    @Test
+    void editRejectsBlankContent() {
+        UUID draftId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> draftService.edit(draftId, " ", null, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(draftRepository, never()).findById(any());
+        verify(draftRepository, never()).save(any());
+    }
+
+    @Test
+    void editRejectsDraftThatHasLeftReview() {
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.SCHEDULED);
+
+        assertThatThrownBy(() -> draftService.edit(draftId, "too late", null, false))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(draftRepository, never()).save(any());
+    }
+
+    @Test
+    void editThrowsWhenDraftNotFound() {
+        UUID draftId = UUID.randomUUID();
+        when(draftRepository.findById(draftId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> draftService.edit(draftId, "revised", null, false))
+                .isInstanceOf(DraftNotFoundException.class);
+    }
+
+    // --- discard ----------------------------------------------------------------
+
+    @Test
+    void discardsDraft() {
+        stubSaveEchoesArgument();
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.DRAFT);
+
+        Draft draft = draftService.discard(draftId);
+
+        assertThat(draft.getStatus()).isEqualTo(DraftStatus.DISCARDED);
+    }
+
+    @Test
+    void discardsApprovedDraft() {
+        stubSaveEchoesArgument();
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.APPROVED);
+
+        Draft draft = draftService.discard(draftId);
+
+        assertThat(draft.getStatus()).isEqualTo(DraftStatus.DISCARDED);
+    }
+
+    @Test
+    void discardRejectsDraftThatIsQueuedToPublish() {
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.SCHEDULED);
+
+        assertThatThrownBy(() -> draftService.discard(draftId))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(draftRepository, never()).save(any());
+    }
+
+    @Test
+    void discardRejectsPublishedDraft() {
+        UUID draftId = UUID.randomUUID();
+        existingDraft(draftId, DraftStatus.PUBLISHED);
+
+        assertThatThrownBy(() -> draftService.discard(draftId))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(draftRepository, never()).save(any());
+    }
+
     // --- approve ---------------------------------------------------------------
 
     @Test

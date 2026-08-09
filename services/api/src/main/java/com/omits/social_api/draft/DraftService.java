@@ -9,16 +9,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Owns the draft state machine. Every transition validates the current status before advancing,
  * and this is the only component permitted to write {@code drafts.status} (the entity's status
- * setter is package-private to enforce that). The single valid sequence is
+ * setter is package-private to enforce that). The happy path is
  * {@code DRAFT -> APPROVED -> SCHEDULED -> PUBLISHED}, with {@code SCHEDULED -> FAILED} as the
- * error branch reported by the Go publisher. Any other transition raises
- * {@link InvalidStateTransitionException}.
+ * error branch reported by the Go publisher. Two branches leave that track during review:
+ * {@link #edit} sends an {@code APPROVED} draft back to {@code DRAFT}, and {@link #discard}
+ * moves a {@code DRAFT} or {@code APPROVED} draft to the terminal {@code DISCARDED}. Any other
+ * transition raises {@link InvalidStateTransitionException}.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +33,10 @@ public class DraftService {
     /**
      * Creates a new draft in {@link DraftStatus#DRAFT}. This is the manual-authoring path
      * ({@code aiGenerated = false}); AI-generated drafts are created by the drafting slice.
+     *
+     * <p>Only the arguments themselves are validated here. That the account exists, is still
+     * connected, and publishes to {@code platform} is checked by {@link DraftCreationService},
+     * which keeps this slice free of a dependency on the account slice.
      */
     public Draft create(UUID accountId, Platform platform, String content) {
         if (accountId == null) {
@@ -41,6 +49,43 @@ public class DraftService {
             throw new IllegalArgumentException("content must not be blank");
         }
         return draftRepository.save(new Draft(accountId, null, platform, content, false));
+    }
+
+    /**
+     * Replaces the editable body of a draft during review: {@code content}, {@code affiliateLinks},
+     * and {@code disclosureIncluded}. This is a full replace, not a sparse patch — a null
+     * {@code affiliateLinks} clears them.
+     *
+     * <p>Allowed from {@code DRAFT} and {@code APPROVED} only; a draft that has left review
+     * ({@code SCHEDULED} onwards) is immutable. Editing an {@code APPROVED} draft reverts it to
+     * {@code DRAFT}, because approval attests to the content that was approved — changed content
+     * needs a fresh look, and that is also what re-arms the disclosure gate.
+     */
+    public Draft edit(UUID draftId, String content, String affiliateLinks, boolean disclosureIncluded) {
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("content must not be blank");
+        }
+        Draft draft = get(draftId);
+        requireStatusIn(draft, EnumSet.of(DraftStatus.DRAFT, DraftStatus.APPROVED), DraftStatus.DRAFT);
+        draft.setContent(content);
+        draft.setAffiliateLinks(affiliateLinks);
+        draft.setDisclosureIncluded(disclosureIncluded);
+        if (draft.getStatus() == DraftStatus.APPROVED) {
+            draft.setStatus(DraftStatus.DRAFT);
+        }
+        return draftRepository.save(draft);
+    }
+
+    /**
+     * Transitions {@code DRAFT | APPROVED -> DISCARDED}: the reviewer rejected the draft. Terminal
+     * and soft — the row is kept so the review history survives. A draft that is already queued
+     * to publish ({@code SCHEDULED} onwards) cannot be discarded.
+     */
+    public Draft discard(UUID draftId) {
+        Draft draft = get(draftId);
+        requireStatusIn(draft, EnumSet.of(DraftStatus.DRAFT, DraftStatus.APPROVED), DraftStatus.DISCARDED);
+        draft.setStatus(DraftStatus.DISCARDED);
+        return draftRepository.save(draft);
     }
 
     /**
@@ -120,6 +165,13 @@ public class DraftService {
 
     private static void requireStatus(Draft draft, DraftStatus expected, DraftStatus target) {
         if (draft.getStatus() != expected) {
+            throw new InvalidStateTransitionException(draft.getId(), draft.getStatus(), target);
+        }
+    }
+
+    /** As {@link #requireStatus}, for transitions reachable from more than one status. */
+    private static void requireStatusIn(Draft draft, Set<DraftStatus> allowed, DraftStatus target) {
+        if (!allowed.contains(draft.getStatus())) {
             throw new InvalidStateTransitionException(draft.getId(), draft.getStatus(), target);
         }
     }

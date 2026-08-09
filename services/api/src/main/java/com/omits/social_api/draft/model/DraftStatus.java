@@ -5,5 +5,7 @@ public enum DraftStatus {
     APPROVED,
     SCHEDULED,
     PUBLISHED,
-    FAILED
+    FAILED,
+    /** Terminal: the draft was rejected during review and will never be published. */
+    DISCARDED
 }

@@ -6,6 +6,7 @@ import com.omits.social_api.account.dto.ConnectAccountCommand;
 import com.omits.social_api.account.model.Platform;
 import com.omits.social_api.draft.dto.CreateDraftCommand;
 import com.omits.social_api.draft.dto.DraftResponse;
+import com.omits.social_api.draft.dto.EditDraftCommand;
 import com.omits.social_api.draft.dto.FailDraftCommand;
 import com.omits.social_api.draft.dto.PublishDraftCommand;
 import com.omits.social_api.draft.dto.ScheduleDraftCommand;
@@ -183,6 +184,147 @@ class DraftControllerIntegrationTest {
                 .retrieve().body(new ParameterizedTypeReference<List<DraftResponse>>() {
                 });
         assertThat(approvedForAccount).extracting(DraftResponse::id).contains(approvedId).doesNotContain(draftId);
+    }
+
+    // --- edit -------------------------------------------------------------------
+
+    @Test
+    void editReplacesTheDraftBody() {
+        UUID accountId = createAccount("edit-user.bsky.social");
+        UUID draftId = createDraft(accountId, "before").id();
+
+        DraftResponse edited = client().patch().uri("/drafts/" + draftId)
+                .body(new EditDraftCommand("after", "https://example.com/ref?tag=me", true))
+                .retrieve().body(DraftResponse.class);
+
+        assertThat(edited).isNotNull();
+        assertThat(edited.content()).isEqualTo("after");
+        assertThat(edited.affiliateLinks()).isEqualTo("https://example.com/ref?tag=me");
+        assertThat(edited.disclosureIncluded()).isTrue();
+        assertThat(edited.status()).isEqualTo(DraftStatus.DRAFT);
+    }
+
+    @Test
+    void editSendsAnApprovedDraftBackForReReview() {
+        UUID accountId = createAccount("edit-approved-user.bsky.social");
+        UUID draftId = createDraft(accountId, "approve me").id();
+        client().patch().uri("/drafts/" + draftId + "/approve").retrieve().toBodilessEntity();
+
+        DraftResponse edited = client().patch().uri("/drafts/" + draftId)
+                .body(new EditDraftCommand("changed after approval", null, false))
+                .retrieve().body(DraftResponse.class);
+
+        assertThat(edited).isNotNull();
+        assertThat(edited.status()).isEqualTo(DraftStatus.DRAFT);
+    }
+
+    @Test
+    void editOnScheduledDraftReturns409() {
+        UUID accountId = createAccount("edit-scheduled-user.bsky.social");
+        UUID draftId = createDraft(accountId, "queued").id();
+        client().patch().uri("/drafts/" + draftId + "/approve").retrieve().toBodilessEntity();
+        client().patch().uri("/drafts/" + draftId + "/schedule")
+                .body(new ScheduleDraftCommand(SCHEDULED_AT)).retrieve().toBodilessEntity();
+
+        assertThatThrownBy(() -> client().patch().uri("/drafts/" + draftId)
+                .body(new EditDraftCommand("too late", null, false))
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    /**
+     * The disclosure gate, end to end — only reachable now that the body can be edited over HTTP
+     * (previously covered by the unit test alone).
+     */
+    @Test
+    void approveWithAffiliateLinkAndNoDisclosureReturns422() {
+        UUID accountId = createAccount("disclosure-user.bsky.social");
+        UUID draftId = createDraft(accountId, "buy this thing").id();
+        client().patch().uri("/drafts/" + draftId)
+                .body(new EditDraftCommand("buy this thing", "https://example.com/ref?tag=me", false))
+                .retrieve().toBodilessEntity();
+
+        assertThatThrownBy(() -> client().patch().uri("/drafts/" + draftId + "/approve")
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                // Spring 7 resolves 422 to UNPROCESSABLE_CONTENT; UNPROCESSABLE_ENTITY is the
+                // deprecated alias and is a distinct enum constant, so compare against this one.
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
+
+        // Adding the disclosure clears the gate.
+        client().patch().uri("/drafts/" + draftId)
+                .body(new EditDraftCommand("buy this thing", "https://example.com/ref?tag=me", true))
+                .retrieve().toBodilessEntity();
+        DraftResponse approved = client().patch().uri("/drafts/" + draftId + "/approve")
+                .retrieve().body(DraftResponse.class);
+        assertThat(approved).isNotNull();
+        assertThat(approved.status()).isEqualTo(DraftStatus.APPROVED);
+    }
+
+    // --- discard ----------------------------------------------------------------
+
+    @Test
+    void discardMovesDraftToDiscarded() {
+        UUID accountId = createAccount("discard-user.bsky.social");
+        UUID draftId = createDraft(accountId, "not good enough").id();
+
+        DraftResponse discarded = client().patch().uri("/drafts/" + draftId + "/discard")
+                .retrieve().body(DraftResponse.class);
+
+        assertThat(discarded).isNotNull();
+        assertThat(discarded.status()).isEqualTo(DraftStatus.DISCARDED);
+    }
+
+    @Test
+    void discardOnPublishedDraftReturns409() {
+        UUID accountId = createAccount("discard-published-user.bsky.social");
+        UUID draftId = createDraft(accountId, "already out there").id();
+        client().patch().uri("/drafts/" + draftId + "/approve").retrieve().toBodilessEntity();
+        client().patch().uri("/drafts/" + draftId + "/schedule")
+                .body(new ScheduleDraftCommand(SCHEDULED_AT)).retrieve().toBodilessEntity();
+        client().patch().uri("/drafts/" + draftId + "/published")
+                .body(new PublishDraftCommand("at://did:plc:xyz/app.bsky.feed.post/2"))
+                .retrieve().toBodilessEntity();
+
+        assertThatThrownBy(() -> client().patch().uri("/drafts/" + draftId + "/discard")
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    // --- create validation ------------------------------------------------------
+
+    @Test
+    void createForUnknownAccountReturns404() {
+        assertThatThrownBy(() -> client().post().uri("/drafts")
+                .body(new CreateDraftCommand(UUID.randomUUID(), Platform.BLUESKY, "orphan"))
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    void createForDisconnectedAccountReturns409() {
+        UUID accountId = createAccount("disconnected-user.bsky.social");
+        client().delete().uri("/accounts/" + accountId).retrieve().toBodilessEntity();
+
+        assertThatThrownBy(() -> client().post().uri("/drafts")
+                .body(new CreateDraftCommand(accountId, Platform.BLUESKY, "too late"))
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void createWithPlatformThatDoesNotMatchTheAccountReturns409() {
+        UUID accountId = createAccount("mismatch-user.bsky.social");
+
+        assertThatThrownBy(() -> client().post().uri("/drafts")
+                .body(new CreateDraftCommand(accountId, Platform.MASTODON, "wrong platform"))
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));
     }
 
     @Test
