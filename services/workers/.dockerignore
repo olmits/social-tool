@@ -1,0 +1,11 @@
+bin/
+.env
+.env.local
+*.out
+*.test
+
+Makefile
+PLAN.md
+docker-compose.yml
+.dockerignore
+.gitignore

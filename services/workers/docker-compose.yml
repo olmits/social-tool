@@ -1,0 +1,14 @@
+services:
+  publisher:
+    build: .
+    image: social-workers:local
+    command: ["publish"]
+    environment:
+      # The core API runs from its own compose file (services/api), so reach it through
+      # the host rather than a shared compose network.
+      CORE_API_URL: ${CORE_API_URL:-http://host.docker.internal:8080}
+      # Must match the API's API_KEY (services/api/docker-compose.yml -> local-dev-api-key).
+      CORE_API_KEY: ${API_KEY:-local-dev-api-key}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
