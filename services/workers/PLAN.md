@@ -71,7 +71,12 @@ Small, but it sets every convention that follows.
   mark failed. Injects `X-API-Key`; maps non-2xx to typed errors.
 - Dockerfile + a `workers` service in the compose file so it runs against local Postgres/API.
 
-## Phase 1 — Publisher (the priority)
+## Phase 1 — Publisher (Bluesky slice done)
+
+Delivered: `internal/creds` (local + Secrets Manager), `internal/adapter` + `bluesky`,
+`internal/publisher` (poll, due-selection, callbacks). `credentialRef` is now exposed on the
+core API's `AccountResponse`, closing the blocker below. Still open from this phase: bounded
+retry/backoff on the publish itself, per-platform rate limiting, and the Mastodon adapter.
 
 - **Platform adapter interface in Go** — `Post(ctx, text) (remoteID, error)`, mirroring the
   Java surface. One implementation to start: **Bluesky** (session create + `createRecord`).

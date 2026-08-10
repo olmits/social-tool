@@ -81,9 +81,15 @@ commands:
   %-9s show this message
 
 environment:
-  CORE_API_URL    base URL of the Java core API (default http://localhost:8080)
-  CORE_API_KEY    shared X-API-Key for the core API (required)
-  LOG_LEVEL       debug | info | warn | error (default info)
-  HTTP_TIMEOUT    per-request timeout, as a Go duration (default 10s)
+  CORE_API_URL           base URL of the Java core API (default http://localhost:8080)
+  CORE_API_KEY           shared X-API-Key for the core API (required)
+  LOG_LEVEL              debug | info | warn | error (default info)
+  HTTP_TIMEOUT           per-request timeout, as a Go duration (default 10s)
+  POLL_INTERVAL          how often to check for due drafts (default 30s)
+  BLUESKY_BASE_URL       AT Protocol PDS host (default https://bsky.social)
+  CREDENTIALS_BACKEND    local | secretsmanager (default local)
+  LOCAL_CREDENTIALS_DIR  credential directory for the local backend
+                         (default ../api/.local-secrets)
+  AWS_REGION             region for the secretsmanager backend (optional)
 `, cmdPublish, cmdPoll, cmdAnalytics, "help")
 }
