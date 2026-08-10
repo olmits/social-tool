@@ -14,6 +14,12 @@ export interface AccountResponse {
   /** Present for MASTODON, null otherwise. */
   instance: string | null;
   status: AccountStatus;
+  /**
+   * Reference to the account's entry in the credential store — not the credential itself.
+   * Exposed for the Go publisher, which resolves it at publish time. The panel must not
+   * render or use this.
+   */
+  credentialRef: string;
   createdAt: string;
   updatedAt: string;
 }
