@@ -16,7 +16,7 @@ same image and the split happens at the deployment level.
 | Subcommand | Job | Status |
 |---|---|---|
 | `publish` | Takes drafts that are approved and past their scheduled time, posts them to the platform, and reports the outcome back to the core API. | Working — Bluesky only |
-| `poll` | Polls free-API sources (Hacker News, Reddit, dev.to, GitHub Trending) into normalized `signals` for use as drafting input. | Not implemented |
+| `poll` | Polls free-API sources into normalized `signals` for use as drafting input. | Working — Hacker News, dev.to, GitHub Trending |
 | `analytics` | Fetches engagement metrics for published posts. | Not implemented |
 
 The publisher is the only component in the whole system that writes to a social platform, and
@@ -169,5 +169,10 @@ internal/
 ├── adapter/          # the platform interface
 │   └── bluesky/      # AT Protocol: createSession + createRecord
 ├── publisher/        # the poll-and-publish loop and its callbacks
+├── source/           # the content-source interface and score normalization
+│   ├── hackernews/   # Firebase API: topstories + per-item fetches
+│   ├── devto/        # public articles listing
+│   └── github/       # search API, standing in for the unpublished trending API
+├── radar/            # the trend-radar run loop: fan out, normalize, ingest
 └── worker/           # shared lifecycle: start/stop logging, shutdown semantics
 ```

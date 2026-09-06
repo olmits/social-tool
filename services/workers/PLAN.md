@@ -42,10 +42,14 @@ These are the forks that shape everything else. My recommendation on each.
    SQS is the target end state, but it requires a producer in Java that doesn't exist;
    putting the seam in an interface means swapping in SQS later doesn't touch publish logic.
 
-3. **Does Go talk to Postgres directly?** → **No, for the publisher** — HTTP only, so the
-   state machine stays the single writer of `drafts.status`. For trend radar this is a real
-   question (a poller writing thousands of signals through HTTP is awkward), but Java owns
-   Flyway, so shared direct writes mean shared schema ownership. Defer it to Phase 2.
+3. **Does Go talk to Postgres directly?** → **No — resolved, HTTP for both workers.** The
+   publisher was never in question: the state machine has to stay the single writer of
+   `drafts.status`. Trend radar was the open case, on the assumption that pushing thousands
+   of signals through HTTP would be awkward. Actual volume settled it — three sources at 50
+   items each is ~150 rows per run, one request, nowhere near awkward. So Java keeps sole
+   ownership of Flyway and the schema, and the workers need no database credentials, no
+   connection pool, and no RDS security-group rule. `POST /signals` upserts on
+   `(source, external_id)`; see `internal/radar` and the core API's `signal` slice.
 
 4. **How Go gets account credentials.** Secrets Manager by `credential_ref` — but
    `AccountResponse` doesn't expose that field, so there is no path today. **This is a
@@ -92,13 +96,30 @@ retry/backoff on the publish itself, per-platform rate limiting, and the Mastodo
 
 End state: approve and schedule a draft in the panel, and it actually appears on Bluesky.
 
-## Phase 2 — Trend radar
+## Phase 2 — Trend radar (Hacker News / dev.to / GitHub slice done)
 
-- A `Source` interface (`Fetch(ctx) []Signal`) with one implementation per source; each is
+Delivered: `internal/source` (the `Source` interface plus score normalization),
+`internal/source/{hackernews,devto,github}`, `internal/radar` (concurrent fan-out with
+per-source failure isolation, chunked ingest), and the core API's `signal` slice behind
+`POST /signals`. Still open from this phase: Reddit and Product Hunt, and surfacing signals
+in the panel's Radar page, which still runs on `lib/mock-data.ts`.
+
+- A `Source` interface (`Fetch(ctx) []Item`) with one implementation per source; each is
   independent and failure-isolated — one dead source must not stall a run.
 - Normalization into the `signals` shape, plus deduplication across runs.
-- Persistence — resolve decision 3 first. Needs the `signals` table (Flyway, Java side) and
-  either a write endpoint or a direct-write agreement.
+- **Scoring is normalized per source, not carried raw.** HN points, dev.to reactions, and
+  GitHub stars are incomparable units, so each source's native number is rescaled to 0-100
+  against the highest in that run. The curve is logarithmic: a front-page HN story can
+  outscore the tenth item by an order of magnitude, and a linear scale would flatten the
+  whole mid-field — the part actually worth drafting from — into low single digits.
+- **Deduplication is server-side, on `(source, external_id)`.** That makes a run idempotent:
+  re-polling the same listings, retrying after an ambiguous failure, or overlapping two runs
+  all converge on the same rows. Unlike the publisher, the radar needs no claim or lease.
+- Persistence — resolved, see decision 3. `POST /signals` on the Java side.
+- **Reddit and Product Hunt are not polled.** Both need API credentials, and Reddit needs the
+  app approval described in the root PLAN.md. They exist as `SignalSource` values so the
+  enum does not have to change when they land, but naming either in `RADAR_SOURCES` is
+  rejected at startup rather than silently doing nothing.
 
 ## Phase 3 — Analytics
 
@@ -123,7 +144,7 @@ End state: approve and schedule a draft in the panel, and it actually appears on
 - **A claim / lease transition** — see decision 5. Blocks safe Phase 1 operation, though a
   single-instance publisher can ship without it.
 - **`posts` table** (DEFERRED §1) — blocks Phase 3.
-- **`signals` table** — blocks Phase 2 persistence.
+- ~~**`signals` table**~~ — resolved: `V7__signals.sql` plus the `signal` slice.
 - **SQS producer** — only if decision 2 moves off polling.
 
 ## Suggested order

@@ -26,6 +26,12 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/health", "/actuator/health").permitAll()
+                        // Spring forwards an unhandled exception to /error as an ERROR
+                        // dispatch, which OncePerRequestFilter skips by default — so
+                        // apiKeyAuthFilter does not re-run and the context is empty. Without
+                        // this, every unhandled exception reports as 401 instead of its own
+                        // status, which hides the real failure from callers.
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))

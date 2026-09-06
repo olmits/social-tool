@@ -63,6 +63,8 @@ func run(args []string) error {
 	switch name {
 	case cmdPublish:
 		return publish(ctx, cfg, logger, rest)
+	case cmdPoll:
+		return poll(ctx, cfg, logger, rest)
 	default:
 		return fmt.Errorf("the %s worker is not implemented yet", name)
 	}
@@ -76,9 +78,12 @@ usage:
 
 commands:
   %-9s publish scheduled drafts to their platform
-  %-9s poll content sources into signals (not implemented yet)
+  %-9s poll content sources into signals
   %-9s ingest per-post metrics (not implemented yet)
   %-9s show this message
+
+flags:
+  -once                  run a single pass and exit (publish, poll)
 
 environment:
   CORE_API_URL           base URL of the Java core API (default http://localhost:8080)
@@ -91,5 +96,10 @@ environment:
   LOCAL_CREDENTIALS_DIR  credential directory for the local backend
                          (default ../api/.local-secrets)
   AWS_REGION             region for the secretsmanager backend (optional)
+  RADAR_INTERVAL         how often to poll content sources (default 1h)
+  RADAR_SOURCES          comma-separated subset of HACKER_NEWS, DEVTO,
+                         GITHUB_TRENDING (default: all of them)
+  RADAR_LIMIT            items to take from each source per run (default 50)
+  GITHUB_TOKEN           raises the GitHub search rate limit (optional)
 `, cmdPublish, cmdPoll, cmdAnalytics, "help")
 }

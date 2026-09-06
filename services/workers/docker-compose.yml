@@ -1,14 +1,32 @@
+# One image backs every worker; the subcommand picks which one a container becomes.
+# Shared settings live in the anchor below so a new worker is a command plus whatever
+# environment only it reads.
+x-worker: &worker
+  build: .
+  image: social-workers:local
+  environment: &worker-env
+    # The core API runs from its own compose file (services/api), so reach it through
+    # the host rather than a shared compose network.
+    CORE_API_URL: ${CORE_API_URL:-http://host.docker.internal:8080}
+    # Must match the API's API_KEY (services/api/docker-compose.yml -> local-dev-api-key).
+    CORE_API_KEY: ${API_KEY:-local-dev-api-key}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
 services:
   publisher:
-    build: .
-    image: social-workers:local
+    <<: *worker
     command: ["publish"]
+
+  radar:
+    <<: *worker
+    command: ["poll"]
     environment:
-      # The core API runs from its own compose file (services/api), so reach it through
-      # the host rather than a shared compose network.
-      CORE_API_URL: ${CORE_API_URL:-http://host.docker.internal:8080}
-      # Must match the API's API_KEY (services/api/docker-compose.yml -> local-dev-api-key).
-      CORE_API_KEY: ${API_KEY:-local-dev-api-key}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      <<: *worker-env
+      # Empty RADAR_SOURCES selects every known source, which is the useful default.
+      RADAR_SOURCES: ${RADAR_SOURCES:-}
+      RADAR_INTERVAL: ${RADAR_INTERVAL:-1h}
+      RADAR_LIMIT: ${RADAR_LIMIT:-50}
+      # Optional: raises the GitHub search rate limit from 10 to 30 requests per minute.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}

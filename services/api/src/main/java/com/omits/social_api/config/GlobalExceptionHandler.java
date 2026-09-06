@@ -11,6 +11,7 @@ import com.omits.social_api.draft.exception.InvalidStateTransitionException;
 import com.omits.social_api.draft.exception.PlatformMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -37,6 +38,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
+    }
+
+    /**
+     * A body that does not fit the endpoint's shape — a wrong JSON type, a malformed
+     * document, an unparseable timestamp. Jackson's own message names the offending field
+     * and is not echoed back, since it exposes internal type names; the status is what the
+     * caller needs to know it sent the request wrong.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("request body could not be read: check field types against the endpoint's contract"));
     }
 
     @ExceptionHandler(PlatformApiException.class)

@@ -85,7 +85,7 @@ Reddit is limited to a single account. Reddit's Responsible Builder Policy (upda
 |---|---|
 | `accounts` | platform, handle, credential_ref, status |
 | `mastodon_account_details` | account_id, instance |
-| `signals` | source, raw_payload, topic, score, fetched_at |
+| `signals` | source, external_id, topic, url, score, raw_payload, fetched_at |
 | `drafts` | account_id, signal_id, platform, content, affiliate_links, status, ai_generated, disclosure_included |
 | `posts` | draft_id, account_id, platform, remote_id, published_at |
 | `metrics` | post_id, impressions, clicks, engagement, fetched_at |
