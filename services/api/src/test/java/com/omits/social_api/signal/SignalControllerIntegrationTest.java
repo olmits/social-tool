@@ -5,6 +5,8 @@ import com.omits.social_api.signal.dto.IngestSignalsCommand;
 import com.omits.social_api.signal.dto.IngestSignalsResponse;
 import com.omits.social_api.signal.dto.SignalResponse;
 import com.omits.social_api.signal.model.SignalSource;
+import com.omits.social_api.topic.dto.CreateTopicCommand;
+import com.omits.social_api.topic.dto.TopicResponse;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -70,10 +73,21 @@ class SignalControllerIntegrationTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static IngestSignalsCommand.Item item(SignalSource source, String externalId,
-                                                  String topic, int score) {
+                                                  String title, int score) {
+        return item(source, externalId, title, score, null);
+    }
+
+    private static IngestSignalsCommand.Item item(SignalSource source, String externalId,
+                                                  String title, int score, UUID topicId) {
         var payload = MAPPER.createObjectNode().put("id", externalId).put("native", score);
-        return new IngestSignalsCommand.Item(source, externalId, topic,
-                "https://example.test/" + externalId, score, payload, FETCHED_AT);
+        return new IngestSignalsCommand.Item(source, externalId, title, topicId,
+                "https://example.test/" + externalId, score, score * 10, payload, FETCHED_AT);
+    }
+
+    private TopicResponse createTopic(String name, boolean enabled) {
+        return client().post().uri("/topics")
+                .body(new CreateTopicCommand(name + "-" + uniqueId(), enabled, Map.of()))
+                .retrieve().body(TopicResponse.class);
     }
 
     private IngestSignalsResponse ingest(IngestSignalsCommand.Item... items) {
@@ -84,6 +98,13 @@ class SignalControllerIntegrationTest {
 
     private List<SignalResponse> list(SignalSource source) {
         String uri = source == null ? "/signals" : "/signals?source=" + source;
+        return client().get().uri(uri)
+                .retrieve().body(new ParameterizedTypeReference<>() {
+                });
+    }
+
+    private List<SignalResponse> listByTopic(UUID topicId, SignalSource source) {
+        String uri = "/signals?topicId=" + topicId + (source == null ? "" : "&source=" + source);
         return client().get().uri(uri)
                 .retrieve().body(new ParameterizedTypeReference<>() {
                 });
@@ -105,8 +126,11 @@ class SignalControllerIntegrationTest {
                 .filter(s -> s.externalId().equals(externalId))
                 .findFirst().orElseThrow();
         assertThat(stored.id()).isNotNull();
-        assertThat(stored.topic()).isEqualTo("A new thing");
+        assertThat(stored.title()).isEqualTo("A new thing");
         assertThat(stored.score()).isEqualTo(88);
+        assertThat(stored.nativeScore()).isEqualTo(880);
+        assertThat(stored.topicId()).isNull();
+        assertThat(stored.topicName()).isNull();
         assertThat(stored.fetchedAt()).isEqualTo(FETCHED_AT);
         assertThat(stored.createdAt()).isNotNull();
         // rawPayload round-trips through the jsonb column intact. Asserted on the parsed
@@ -125,7 +149,7 @@ class SignalControllerIntegrationTest {
         String externalId = uniqueId();
 
         IngestSignalsResponse first = ingest(
-                item(SignalSource.DEVTO, externalId, "Original topic", 30));
+                item(SignalSource.DEVTO, externalId, "Original title", 30));
         assertThat(first.created()).isEqualTo(1);
 
         UUID idAfterFirst = list(SignalSource.DEVTO).stream()
@@ -133,7 +157,7 @@ class SignalControllerIntegrationTest {
                 .findFirst().orElseThrow().id();
 
         IngestSignalsResponse second = ingest(
-                item(SignalSource.DEVTO, externalId, "Climbing topic", 75));
+                item(SignalSource.DEVTO, externalId, "Climbing title", 75));
         assertThat(second.created()).isZero();
         assertThat(second.updated()).isEqualTo(1);
 
@@ -142,7 +166,7 @@ class SignalControllerIntegrationTest {
                 .toList();
         assertThat(matching).hasSize(1);
         assertThat(matching.getFirst().id()).isEqualTo(idAfterFirst);
-        assertThat(matching.getFirst().topic()).isEqualTo("Climbing topic");
+        assertThat(matching.getFirst().title()).isEqualTo("Climbing title");
         assertThat(matching.getFirst().score()).isEqualTo(75);
     }
 
@@ -155,8 +179,8 @@ class SignalControllerIntegrationTest {
                 item(SignalSource.DEVTO, externalId, "From dev.to", 60));
 
         assertThat(response.created()).isEqualTo(2);
-        assertThat(list(SignalSource.HACKER_NEWS)).anyMatch(s -> s.topic().equals("From HN"));
-        assertThat(list(SignalSource.DEVTO)).anyMatch(s -> s.topic().equals("From dev.to"));
+        assertThat(list(SignalSource.HACKER_NEWS)).anyMatch(s -> s.title().equals("From HN"));
+        assertThat(list(SignalSource.DEVTO)).anyMatch(s -> s.title().equals("From dev.to"));
     }
 
     @Test
@@ -174,7 +198,7 @@ class SignalControllerIntegrationTest {
                 .filter(s -> s.externalId().equals(externalId))
                 .toList();
         assertThat(matching).hasSize(1);
-        assertThat(matching.getFirst().topic()).isEqualTo("Second listing");
+        assertThat(matching.getFirst().title()).isEqualTo("Second listing");
     }
 
     @Test
@@ -197,10 +221,76 @@ class SignalControllerIntegrationTest {
     }
 
     @Test
-    void ingestRejectsBlankTopic() {
+    void ingestRejectsBlankTitle() {
         assertThatThrownBy(() -> ingest(item(SignalSource.DEVTO, uniqueId(), "  ", 10)))
                 .isInstanceOf(HttpClientErrorException.class)
                 .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    // --- topics ---------------------------------------------------------------
+
+    @Test
+    void signalsCarryTheirTopicsNameSoThePanelNeedsNoJoin() {
+        TopicResponse topic = createTopic("Local-first", true);
+        String externalId = uniqueId();
+
+        ingest(item(SignalSource.HACKER_NEWS, externalId, "A CRDT sync engine", 70, topic.id()));
+
+        SignalResponse stored = listByTopic(topic.id(), null).getFirst();
+        assertThat(stored.externalId()).isEqualTo(externalId);
+        assertThat(stored.topicId()).isEqualTo(topic.id());
+        assertThat(stored.topicName()).isEqualTo(topic.name());
+    }
+
+    @Test
+    void listFiltersByTopicAndComposesWithTheSourceFilter() {
+        TopicResponse topic = createTopic("Runtimes", true);
+        TopicResponse other = createTopic("Databases", true);
+
+        ingest(item(SignalSource.DEVTO, uniqueId(), "in topic, devto", 60, topic.id()),
+                item(SignalSource.HACKER_NEWS, uniqueId(), "in topic, hn", 65, topic.id()),
+                item(SignalSource.DEVTO, uniqueId(), "other topic", 70, other.id()));
+
+        assertThat(listByTopic(topic.id(), null)).hasSize(2);
+        assertThat(listByTopic(topic.id(), SignalSource.DEVTO))
+                .singleElement()
+                .satisfies(s -> assertThat(s.title()).isEqualTo("in topic, devto"));
+    }
+
+    @Test
+    void ingestRejectsAnUnknownTopic() {
+        assertThatThrownBy(() -> ingest(
+                item(SignalSource.DEVTO, uniqueId(), "orphan", 10, UUID.randomUUID())))
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    /**
+     * A disabled topic is the user saying "stop collecting this". Storing the batch anyway
+     * would leave the panel showing fresh signals for a topic it presents as switched off.
+     */
+    @Test
+    void ingestRejectsADisabledTopic() {
+        TopicResponse disabled = createTopic("Paused", false);
+
+        assertThatThrownBy(() -> ingest(
+                item(SignalSource.DEVTO, uniqueId(), "unwanted", 10, disabled.id())))
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    /** One bad topic rejects the batch rather than storing the part of it that was valid. */
+    @Test
+    void ingestRejectsTheWholeBatchWhenOneItemNamesABadTopic() {
+        TopicResponse topic = createTopic("Observability", true);
+        String survivor = uniqueId();
+
+        assertThatThrownBy(() -> ingest(
+                item(SignalSource.DEVTO, survivor, "would have been stored", 40, topic.id()),
+                item(SignalSource.DEVTO, uniqueId(), "bad topic", 40, UUID.randomUUID())))
+                .isInstanceOf(HttpClientErrorException.class);
+
+        assertThat(listByTopic(topic.id(), null)).isEmpty();
     }
 
     @Test
@@ -211,7 +301,7 @@ class SignalControllerIntegrationTest {
                 .build();
 
         assertThatThrownBy(() -> unauthenticated.post().uri("/signals")
-                .body(new IngestSignalsCommand(List.of(item(SignalSource.DEVTO, uniqueId(), "topic", 10))))
+                .body(new IngestSignalsCommand(List.of(item(SignalSource.DEVTO, uniqueId(), "title", 10))))
                 .retrieve().body(IngestSignalsResponse.class))
                 .isInstanceOf(HttpClientErrorException.class)
                 .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.UNAUTHORIZED));

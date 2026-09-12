@@ -25,27 +25,36 @@ const (
 )
 
 // Signal is one normalized item as the core API's ingest endpoint accepts it.
+//
+// TopicID is a pointer because it is genuinely optional: a poll that is not topic-scoped
+// sends no topic, and the core API rejects a topic that does not exist or is switched off.
+// Encoding it as "" would name a topic rather than omit one.
 type Signal struct {
-	Source     SignalSource    `json:"source"`
-	ExternalID string          `json:"externalId"`
-	Topic      string          `json:"topic"`
-	URL        string          `json:"url"`
-	Score      int             `json:"score"`
-	RawPayload json.RawMessage `json:"rawPayload"`
-	FetchedAt  time.Time       `json:"fetchedAt"`
+	Source      SignalSource    `json:"source"`
+	ExternalID  string          `json:"externalId"`
+	Title       string          `json:"title"`
+	TopicID     *string         `json:"topicId,omitempty"`
+	URL         string          `json:"url"`
+	Score       int             `json:"score"`
+	NativeScore int             `json:"nativeScore"`
+	RawPayload  json.RawMessage `json:"rawPayload"`
+	FetchedAt   time.Time       `json:"fetchedAt"`
 }
 
 // StoredSignal mirrors the core API's SignalResponse.
 type StoredSignal struct {
-	ID         string          `json:"id"`
-	Source     SignalSource    `json:"source"`
-	ExternalID string          `json:"externalId"`
-	Topic      string          `json:"topic"`
-	URL        string          `json:"url"`
-	Score      int             `json:"score"`
-	RawPayload json.RawMessage `json:"rawPayload"`
-	FetchedAt  time.Time       `json:"fetchedAt"`
-	CreatedAt  time.Time       `json:"createdAt"`
+	ID          string          `json:"id"`
+	Source      SignalSource    `json:"source"`
+	ExternalID  string          `json:"externalId"`
+	Title       string          `json:"title"`
+	TopicID     *string         `json:"topicId"`
+	TopicName   *string         `json:"topicName"`
+	URL         string          `json:"url"`
+	Score       int             `json:"score"`
+	NativeScore int             `json:"nativeScore"`
+	RawPayload  json.RawMessage `json:"rawPayload"`
+	FetchedAt   time.Time       `json:"fetchedAt"`
+	CreatedAt   time.Time       `json:"createdAt"`
 }
 
 type ingestSignalsCommand struct {

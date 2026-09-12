@@ -62,7 +62,7 @@ func items(n int) []source.Item {
 		id := strconv.Itoa(i)
 		built = append(built, source.Item{
 			ExternalID:  id,
-			Topic:       "topic " + id,
+			Title:       "title " + id,
 			URL:         "https://example.test/" + id,
 			NativeScore: n - i,
 			RawPayload:  json.RawMessage(`{"id":` + id + `}`),

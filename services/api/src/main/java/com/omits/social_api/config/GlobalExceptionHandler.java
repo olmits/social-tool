@@ -9,6 +9,9 @@ import com.omits.social_api.draft.exception.DisclosureRequiredException;
 import com.omits.social_api.draft.exception.DraftNotFoundException;
 import com.omits.social_api.draft.exception.InvalidStateTransitionException;
 import com.omits.social_api.draft.exception.PlatformMismatchException;
+import com.omits.social_api.topic.exception.DuplicateTopicException;
+import com.omits.social_api.topic.exception.TopicNotEnabledException;
+import com.omits.social_api.topic.exception.TopicNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -18,14 +21,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({AccountNotFoundException.class, DraftNotFoundException.class})
+    @ExceptionHandler({AccountNotFoundException.class, DraftNotFoundException.class,
+            TopicNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage()));
     }
 
     @ExceptionHandler({DuplicateAccountException.class, RedditAccountLimitException.class,
             InvalidStateTransitionException.class, AccountNotActiveException.class,
-            PlatformMismatchException.class})
+            PlatformMismatchException.class, DuplicateTopicException.class,
+            TopicNotEnabledException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
     }

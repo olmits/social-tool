@@ -14,18 +14,61 @@ iteration and is recorded under *Deferred* below.
 
 ## Backend endpoints
 
-Available now:
+Shipped today (`signal/`, `V7__signals.sql`):
 
-- `GET /signals?source=` — stored signals, ranked by score
+- `GET /signals?source=` — stored signals, ranked by score. **The only read** — there is no
+  `GET /signals/{id}`, so nothing here can be built around fetching one signal.
+- `POST /signals` — the Go poller's ingest. Not a panel call.
 
-Arriving with `services/api/RADAR_PLAN.md` Phase 1, and required by everything here:
+`services/api/RADAR_PLAN.md` Phase 1 has since been **delivered**, so everything below is
+unblocked:
 
 - `GET /topics`, `POST /topics`, `PATCH /topics/{id}`, `DELETE /topics/{id}`
-- `GET /signals?topicId=&source=` — the `topicId` filter
-- `signals.topic` renamed to `signals.title`, plus a nullable `topicId`
+- `GET /topics/queries` — the poller's work list. Not a panel call.
+- `GET /signals?topicId=&source=` — the `topicId` filter, composing with `source`
+- `SignalResponse`: `topic` renamed to `title`, plus `topicId`, `topicName`, and `nativeScore`
+
+Two behaviours worth knowing before wiring the Topics page:
+
+- **`PATCH /topics/{id}` is a sparse patch**, unlike `PATCH /drafts/{id}`. A null field is left
+  unchanged, so the enabled toggle sends `{"enabled": false}` alone. A *present* `queries` map
+  replaces the topic's queries wholesale — an empty map clears them.
+- **A duplicate topic name is a 409**, distinct from a 400 for a blank or over-long one, and
+  the match is case-insensitive. The panel can rely on the status.
+
+The DTO the panel consumes:
+
+```ts
+interface SignalResponse {
+  id: string;
+  source: SignalSource;     // HACKER_NEWS | DEVTO | GITHUB_TRENDING | REDDIT | PRODUCT_HUNT
+  externalId: string;
+  title: string;            // renamed from `topic`
+  topicId: string | null;   // null for a signal polled before topics existed
+  topicName: string | null; // joined server-side, so the panel does no id→name lookup
+  url: string;
+  score: number;            // 0-100 — the panel's `match`
+  nativeScore: number;      // the source's own count, pre-normalization
+  rawPayload: string;       // JSON as a *string*; the panel does not consume it
+  fetchedAt: string;
+  createdAt: string;
+}
+```
+
+`topicName` is resolved server-side and `nativeScore` is stored per signal, both added at this
+plan's request (`services/api/RADAR_PLAN.md` Phase 1 task 4). Without them the panel could not
+render the topic chip or the Engagement column except through a client-side join and a
+per-source `rawPayload` parser, which is why they were asked for rather than worked around.
+
+One caveat that outlives Phase 1: **the poller does not select topics yet.** It does not call
+`GET /topics/queries`, so it polls unscoped and every signal it stores has a null `topicId`.
+Topics can be created and signals *can* be filtered by one, but nothing populates the link
+until the worker-side change lands. Build the topic filter; expect it to return nothing until
+then.
 
 `SignalSource` values are UPPERCASE (`HACKER_NEWS | DEVTO | GITHUB_TRENDING | REDDIT |
-PRODUCT_HUNT`), like every other backend enum.
+PRODUCT_HUNT`), like every other backend enum — but only the first three are ever polled; see
+Phase 1 task 6.
 
 ## Conventions to follow
 
@@ -54,8 +97,36 @@ The mock already uses the vocabulary the backend is moving to:
 `title` is the headline; `topic` is the **category**; `match` is per-topic relevance. The
 backend's `signals.topic` column currently holds the headline, which collides with all of
 this — hence the rename in the API plan. **The UI does not need to adapt to the backend here;
-the backend is adapting to the UI.** Keep the mock's vocabulary when wiring the real data, and
-`match` becomes the per-topic normalized `score`.
+the backend is adapting to the UI.** Keep the mock's vocabulary when wiring the real data.
+
+The full mapping, since three of the mock's seven fields are less obvious than the rename:
+
+| Mock `Signal` | Comes from | Note |
+|---|---|---|
+| `source` | `source` | UPPERCASE enum; formatted at the edge |
+| `title` | `title` | after the rename |
+| `topic` | `topicName` | new field; a null renders no chip |
+| `match` | `score` | see the caveat below |
+| `engagement` | `nativeScore` + `source` | new field, and **one** number, not two |
+| `age` | `createdAt` — *not* `fetchedAt` | see below |
+| — | `url` | the DTO carries it; the page renders nothing for it today |
+
+**`age` must come from `createdAt`.** `SignalService.ingest` refreshes `fetchedAt` on every
+re-poll, so it means *last seen*, not *first seen* — a story that has sat on the front page
+for two days reports an age of minutes. `createdAt` is `updatable = false` and is the
+first-sighting timestamp the "2h" badge actually means.
+
+**`engagement` loses the comment count.** The mock renders `"842 pts · 310 comments"`; the
+backend will carry a single `nativeScore`. The panel formats it per source — `842 pts`,
+`456 reactions`, `1.2k ★` — and the second number is dropped. Recovering it would mean a
+per-source `rawPayload` parser in the panel, which is the thing `nativeScore` exists to avoid.
+
+**`match` is not per-topic yet.** `source.Normalize`
+(`services/workers/internal/source/source.go`) rescales against the highest score in a
+*source's* batch, so a quiet topic's leader sits far below whatever is trending globally.
+Per-`(source, topic)` rescaling is API-plan Phase 2. Until it ships, either sequence Phase 2
+first or label the column "Score" rather than "Match" — a percentage labelled "match" that
+does not measure topic match is worse than no label.
 
 ---
 
@@ -67,51 +138,88 @@ the backend is adapting to the UI.** Keep the mock's vocabulary when wiring the 
    `deleteTopic`; export `TOPICS_TAG` and tag the reads.
 3. **Signals data layer** — `lib/api/signals.ts`: `listSignals({ topicId?, source? })`;
    export `SIGNALS_TAG`.
-4. **Server actions** — `createTopicAction`, `updateTopicAction`, `deleteTopicAction` in a
-   topic actions module: wrap the calls, return `ActionResult`, `updateTag(TOPICS_TAG)`, and
-   map 400/409 to user-facing messages (409 is a duplicate topic name).
-5. **Display helpers** — add `sourceLabel()` and per-source badge metadata to
-   `lib/api/mappers.ts`, alongside the existing `statusLabel` / `charLimit`.
+4. **Server actions** — `createTopicAction`, `updateTopicAction`, `deleteTopicAction`
+   appended to the existing `lib/api/actions.ts`; accounts and drafts already share that one
+   file, so a separate topics module would be the first split. Wrap the calls, return
+   `ActionResult`, `updateTag(TOPICS_TAG)`, and surface `ApiError.message` — `toActionError`
+   already does this — rather than switching on status. A duplicate topic name is **not**
+   reliably a 409: `GlobalExceptionHandler` maps `IllegalArgumentException` to 400 and only
+   explicitly registered exception types to 409, and the topic slice does not exist yet, so
+   neither does such a type. The API plan now asks for one; until it lands, do not branch on
+   the status code.
+5. **Display helpers** — add `sourceLabel()`, per-source badge metadata, and
+   `engagementLabel(source, nativeScore)` to `lib/api/mappers.ts`, alongside the existing
+   `statusLabel` / `charLimit`. `engagementLabel` is where the per-source unit lives —
+   `pts` / `reactions` / `★` — and is the only place `nativeScore` is formatted.
+6. **`SIGNAL_SOURCES` — the polled set, not the enum.** Only `HACKER_NEWS`, `DEVTO`, and
+   `GITHUB_TRENDING` have a `Source` implementation
+   (`services/workers/cmd/workers/poll.go:buildSources`). `REDDIT` and `PRODUCT_HUNT` are
+   declared in the enum but unreachable — both need credentials, and Reddit needs the app
+   approval in `PLAN.md:80`. Drive the chip row from the polled set so the page does not show
+   two filters that can only ever return nothing.
 
 ## Phase 2 — Extract `PLATFORM_META` out of the mocks
 
-6. **Move `PLATFORM_META` to `lib/api/mappers.ts`.** This is display metadata, not fixture
+7. **Move `PLATFORM_META` to `lib/api/mappers.ts`.** This is display metadata, not fixture
    data, and it is imported by six *real* components — `sidebar`, `ReviewBoard`, `EventCard`,
    `ScheduleCalendar`, `PlatformPicker`, `DetailHeader`. It has to move before
    `lib/mock-data.ts` can be deleted, and doing it as its own step keeps the Radar rewiring
    diff readable.
 
    `SOURCE_META` gets the same treatment, keyed by the UPPERCASE `SignalSource` rather than
-   the mock's display strings.
+   the mock's display strings. `SOURCE_CHIPS` re-keys with it — it becomes
+   `(SignalSource | "All")[]` built from the polled set of task 6, because the chip's value is
+   what goes into the `source=` query param. It cannot stay a list of display strings.
 
 ## Phase 3 — Topics page
 
-7. **Route + nav** — `app/(app)/topics/page.tsx`, and a fourth `sidebar.tsx` entry placed
+8. **Route + nav** — `app/(app)/topics/page.tsx`, and a fourth `sidebar.tsx` entry placed
    *above* Trend Radar, since topics configure it.
-8. **`components/topics/`** — `TopicList` (rows with name, per-source queries, enabled
+9. **`components/topics/`** — `TopicList` (rows with name, per-source queries, enabled
    toggle), `TopicDialog` (create/edit), `useTopicForm` (`useController` fields, per the
    `connect-account/` reference implementation). Delete behind a confirm dialog, matching
    `DiscardDraftDialog`.
-9. **Empty state that teaches** — an empty Topics list is the first thing a new install shows,
-   and the radar returns nothing until a topic exists. The empty state should say so and link
-   straight to the create dialog.
+10. **Empty state that teaches** — an empty Topics list is the first thing a new install
+    shows, and the radar returns nothing until a topic exists. The empty state should say so
+    and link straight to the create dialog.
 
 ## Phase 4 — Radar page off mocks
 
-10. **Signals from the API** — replace the `SIGNALS` mock with `listSignals(...)`, keep the
+11. **Signals from the API** — replace the `SIGNALS` mock with `listSignals(...)`, keep the
     existing layout (stats row, search, source chips, table/cards toggle). Add loading, empty,
-    and error states; the page currently has none because mock data cannot fail.
-11. **Topic filter** — a topic selector in the header, driven by a `topicId` query param so a
-    filtered view is linkable. `SOURCE_CHIPS` stays as-is and composes with it.
-12. **Real stats** — `RADAR_STATS` is four hardcoded tiles. Derive them from the signal list
-    (new since last run, topics active, drafted) or drop the tiles that have no real source
-    behind them. Inventing numbers in a live page is worse than showing three tiles.
-13. **"Draft a post" action** — the primary action per signal card, creating a `DRAFT` via the
-    drafting slice and routing to Review. **Blocked** — see below.
+    and error states; the page currently has none because mock data cannot fail. Two details
+    the mock hid:
+
+    - **Link out.** Each row and card gets `signal.url` as a link on the title. The mock has
+      no URL, so the page has never had one — but a signal you cannot open is not actionable,
+      and this is the cheapest thing on the page.
+    - **`updated 2m ago`** in the header is hardcoded. It is `max(fetchedAt)` across the
+      returned signals, which is exactly what `fetchedAt` is good for (see the naming note).
+
+12. **Refresh** — a `"use server"` action calling `updateTag(SIGNALS_TAG)`, not a client
+    refetch. It re-reads what the poller has already stored; it does not trigger a run (see
+    *Out of scope*).
+13. **Topic filter** — a topic selector in the header, driven by a `topicId` query param so a
+    filtered view is linkable. The source chips compose with it; both filters are passed
+    server-side to `listSignals({ topicId, source })` rather than filtered in the client.
+14. **Real stats** — `RADAR_STATS` is four hardcoded tiles. Three are derivable from the
+    signal list and one is not:
+
+    | Tile | Derived from |
+    |---|---|
+    | New signals (24h) | count of `createdAt` within 24h — *first* sightings, so a re-poll does not inflate it |
+    | Sources active | distinct `source` values present in the list |
+    | Avg match score | mean `score` |
+    | ~~Drafted today~~ | **drop it** — needs drafts carrying a `signalId`, blocked with task 15 |
+
+    Drop the deltas (`+6`, `all up`) with it: there is no stored previous run to compare
+    against. Inventing numbers on a live page is worse than showing three tiles.
+15. **"Draft a post" action** — the primary action per signal card, creating a `DRAFT` from
+    the signal and routing to Review. **Blocked on two things** — see below.
 
 ## Phase 5 — Cleanup
 
-14. **Delete `lib/mock-data.ts`.** After Phases 2 and 4 the file holds only `SIGNALS`,
+16. **Delete `lib/mock-data.ts`.** After Phases 2 and 4 the file holds only `SIGNALS`,
     `RADAR_STATS`, `SOURCE_CHIPS`, and `SOURCE_META`, all of which are then dead. Confirm with
     a grep that nothing imports it.
 
@@ -119,12 +227,21 @@ the backend is adapting to the UI.** Keep the mock's vocabulary when wiring the 
 
 ## Blocked on backend — do not start until the endpoint exists
 
-- **Everything in Phases 1, 3, and 4** depends on `services/api/RADAR_PLAN.md` Phase 1
-  (`/topics` and the `topicId` filter). `GET /signals` alone is not enough to build against —
-  without topics the page has nothing to filter by and no `match` to rank on.
-- **Task 13, "Draft a post" from a signal** — needs the drafting slice (`drafting/` is still
-  an empty package). `POST /drafts` takes manual content only, so a signal cannot yet become a
-  draft. Until then the signal card's action is inert, exactly as the Regenerate button is on
+- ~~**Everything in Phases 1, 3, and 4** depends on `services/api/RADAR_PLAN.md` Phase 1.~~
+  **Cleared** — that slice is delivered. What remains is the worker-side half: until the poller
+  reads `GET /topics/queries`, signals arrive with a null `topicId`, so a topic-filtered view
+  is correct but empty.
+- **Task 15, "Draft a post" from a signal — blocked twice over.** Both have to clear:
+  1. `drafting/` is still an empty package, so there is nothing that turns a signal into
+     draft text.
+  2. `CreateDraftCommand` is `(accountId, platform, content)` — **it has no `signalId`
+     field**, even though the `drafts.signal_id` column exists (`V7__signals.sql`) and
+     `DraftResponse.signalId` is already returned. So even a hand-written draft cannot record
+     which signal it came from. This is a small, independent API change and is worth asking
+     for separately from the drafting slice: it unblocks the "Drafted today" tile in task 14
+     and the provenance line in `DraftDetail.tsx:136`.
+
+  Until both land the signal card's action is inert, exactly as the Regenerate button is on
   the Review page today.
 
 ## Deferred — the reply loop (next iteration)
@@ -159,8 +276,8 @@ Recorded so the shape is known, but **not built now**. Depends on `services/api/
 
 ## Suggested order
 
-Phase 1 (tasks 1→5) → Phase 2 (6) → Phase 3 (7→9) → Phase 4 (10→12; 13 stays inert) →
-Phase 5 (14).
+Phase 1 (tasks 1→6) → Phase 2 (7) → Phase 3 (8→10) → Phase 4 (11→14; 15 stays inert) →
+Phase 5 (16).
 
 Phase 2 before Phase 4 deliberately: extracting `PLATFORM_META` first means the Radar rewiring
 is one focused diff instead of a rename tangled through six unrelated components. Topics

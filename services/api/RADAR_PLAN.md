@@ -24,7 +24,7 @@ belongs in the schema until the loop that needs it is being built.
 
 ## Where this fits today
 
-Already delivered (`V7__signals.sql`, `signal/`):
+Delivered in the first slice (`V7__signals.sql`, `signal/`):
 
 - `signals` table, unique on `(source, external_id)`.
 - `SignalService.ingest` — batch upsert, idempotent, in-batch dedup, validation.
@@ -32,9 +32,12 @@ Already delivered (`V7__signals.sql`, `signal/`):
 - `SignalSource` enum with all five sources from `PLAN.md:44`; three are polled.
 - The `drafts.signal_id` FK that `V5__drafts.sql` deferred.
 
-What the radar cannot do yet: **it has no notion of what you write about.** It stores whatever
-is globally popular, and the panel's Radar page has modelled a per-signal `topic` category and
-a `match` score since the mock was written. Closing that gap is this plan's main work.
+**Phase 1 below is now delivered too** (`V8__topics.sql`, `V9__signals_topic.sql`, `topic/`,
+`signal/RadarService`), closing the gap this plan was written to close: the radar now knows
+what you write about. What is still open is Phase 2, Phase 3, and the worker-side half of
+Phase 1 — the poller does not yet call `GET /topics/queries`, so it still polls unscoped and
+sends a null `topicId`. Every topic it could send is validated and stored; nothing selects one
+yet.
 
 ---
 
@@ -104,9 +107,14 @@ from a run before topics existed, has no topic behind it.
 
 ---
 
-## Phase 1 — Topics as a first-class entity
+## Phase 1 — Topics as a first-class entity — **delivered**
 
 The slice that turns "what is popular" into "what is popular in the things I write about".
+
+Kept here as the record of what was built and why. Two things landed differently from the
+sketch below, both noted in place: the `topic_queries` composite key is modelled as a JPA
+element collection rather than an entity, and `GET /signals` gained `topicName` and
+`nativeScore` on its response (task 4) at the panel plan's request.
 
 1. **`V8__topics.sql`** — `topics (id, name, enabled, created_at, updated_at)` with `name`
    unique, plus `topic_queries (topic_id, source, query)` unique on `(topic_id, source)`.
@@ -116,8 +124,33 @@ The slice that turns "what is popular" into "what is popular in the things I wri
    per-topic ranking. Separate from V8 so the rename is revertible on its own.
 3. **`topic/` slice** — `Topic`, `TopicQuery`, repositories, `TopicService`, `TopicController`
    with full CRUD (`GET/POST/PATCH/DELETE /topics`). Straight CRUD; no state machine.
-4. **Extend signal ingest** — `IngestSignalsCommand.Item` gains `topicId`; `SignalService`
-   validates that the topic exists and is enabled. `GET /signals` gains a `topicId` filter.
+
+   One thing not to leave to the default: a duplicate topic name needs its own exception
+   registered in `GlobalExceptionHandler`'s 409 branch, alongside `DuplicateAccountException`.
+   Left as a bare `IllegalArgumentException` it falls through to the 400 handler, and the
+   panel cannot tell "name already taken" from "name was blank".
+4. **Extend signal ingest, and the response the panel reads.** `IngestSignalsCommand.Item`
+   gains `topicId`; `SignalService` validates that the topic exists and is enabled. `GET
+   /signals` gains a `topicId` filter. Three additions to `SignalResponse` beyond the rename,
+   all requested by `apps/admin/RADAR_PLAN.md`:
+
+   - **`topicId`** — the FK, for linking and filtering.
+   - **`topicName`** — joined in `SignalResponse.from()`. The panel renders a topic chip on
+     every signal row; without the name it would have to fetch `/topics` alongside `/signals`
+     and build an id→name map client-side, which breaks its rule of consuming the DTO
+     unreshaped. Nullable, like `topicId`.
+   - **`nativeScore`** — the source's own count, before normalization: HN points, dev.to
+     reactions, GitHub stars. The panel's "Engagement" column has no other source; `score` is
+     rescaled to 0-100 and `rawPayload` is deliberately opaque to the UI. One number only —
+     the panel drops the mock's secondary comment count rather than have the API model two
+     incomparable units.
+
+   `nativeScore` needs a column in `V9__signals_topic.sql`, a field on
+   `IngestSignalsCommand.Item`, and validation that it is non-negative (unlike `score` it has
+   no upper bound). **It also needs three one-line changes on the Go side**, because the
+   number exists there today and is thrown away: `source.Item.NativeScore` is read by
+   `source.Normalize`, which keeps only the rescaled result. Carry it through
+   `source.Signal`, `coreapi.Signal`, and `radar.toWire`.
 5. **`GET /topics/queries`** — a worker-facing projection returning enabled topics with their
    per-source queries, so the poller fetches its whole work list in one call.
 

@@ -58,7 +58,11 @@ public class Signal {
 
     @Setter(AccessLevel.PACKAGE)
     @Column(nullable = false, columnDefinition = "text")
-    private String topic;
+    private String title;
+
+    @Setter(AccessLevel.PACKAGE)
+    @Column(name = "topic_id")
+    private UUID topicId;
 
     @Setter(AccessLevel.PACKAGE)
     @Column(nullable = false, columnDefinition = "text")
@@ -67,6 +71,15 @@ public class Signal {
     @Setter(AccessLevel.PACKAGE)
     @Column(nullable = false)
     private int score;
+
+    /**
+     * The source's own popularity count, unscaled: HN points, dev.to reactions, GitHub stars.
+     * Comparable only against other items from the same source, which is why {@link #score}
+     * exists alongside it — this one is for display, that one is for ranking.
+     */
+    @Setter(AccessLevel.PACKAGE)
+    @Column(name = "native_score", nullable = false)
+    private int nativeScore;
 
     @Setter(AccessLevel.PACKAGE)
     @JdbcTypeCode(SqlTypes.JSON)
@@ -80,13 +93,15 @@ public class Signal {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Signal(SignalSource source, String externalId, String topic, String url, int score,
-                  String rawPayload, Instant fetchedAt) {
+    public Signal(SignalSource source, String externalId, String title, UUID topicId, String url,
+                  int score, int nativeScore, String rawPayload, Instant fetchedAt) {
         this.source = source;
         this.externalId = externalId;
-        this.topic = topic;
+        this.title = title;
+        this.topicId = topicId;
         this.url = url;
         this.score = score;
+        this.nativeScore = nativeScore;
         this.rawPayload = rawPayload;
         this.fetchedAt = fetchedAt;
     }

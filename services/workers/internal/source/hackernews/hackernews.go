@@ -136,7 +136,7 @@ func (s *Source) fetchItem(ctx context.Context, id int) (source.Item, bool, erro
 
 	return source.Item{
 		ExternalID:  strconv.Itoa(story.ID),
-		Topic:       story.Title,
+		Title:       story.Title,
 		URL:         link,
 		NativeScore: story.Score,
 		RawPayload:  raw,

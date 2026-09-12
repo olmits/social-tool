@@ -58,12 +58,12 @@ func TestFetchReadsRepositories(t *testing.T) {
 		t.Errorf("nativeScore = %d, want the star count", items[0].NativeScore)
 	}
 	// "owner/repo" alone is too terse to draft from, so the description is appended.
-	if items[0].Topic != "acme/rocket — A fast thing" {
-		t.Errorf("topic = %q, want name and description", items[0].Topic)
+	if items[0].Title != "acme/rocket — A fast thing" {
+		t.Errorf("topic = %q, want name and description", items[0].Title)
 	}
 	// ...but a repo without one still needs a usable topic.
-	if items[1].Topic != "acme/plain" {
-		t.Errorf("topic = %q, want the bare name when there is no description", items[1].Topic)
+	if items[1].Title != "acme/plain" {
+		t.Errorf("topic = %q, want the bare name when there is no description", items[1].Title)
 	}
 }
 

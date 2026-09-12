@@ -48,8 +48,8 @@ func TestFetchReadsArticles(t *testing.T) {
 	if items[0].ExternalID != "101" {
 		t.Errorf("externalID = %q, want the dev.to article id", items[0].ExternalID)
 	}
-	if items[0].Topic != "Shipping Go services" {
-		t.Errorf("topic = %q", items[0].Topic)
+	if items[0].Title != "Shipping Go services" {
+		t.Errorf("title = %q", items[0].Title)
 	}
 	if items[0].NativeScore != 140 {
 		t.Errorf("nativeScore = %d, want the public reaction count", items[0].NativeScore)
@@ -86,7 +86,7 @@ func TestFetchSkipsIncompleteArticles(t *testing.T) {
 		t.Fatalf("Fetch: %v", err)
 	}
 
-	if len(items) != 1 || items[0].Topic != "Good" {
+	if len(items) != 1 || items[0].Title != "Good" {
 		t.Errorf("expected only the complete article, got %+v", items)
 	}
 }

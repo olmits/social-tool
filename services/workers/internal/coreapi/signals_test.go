@@ -30,22 +30,24 @@ func TestIngestSignalsPostsBatch(t *testing.T) {
 
 	result, err := client.IngestSignals(t.Context(), []coreapi.Signal{
 		{
-			Source:     coreapi.SourceHackerNews,
-			ExternalID: "42",
-			Topic:      "Something interesting",
-			URL:        "https://example.test/42",
-			Score:      88,
-			RawPayload: json.RawMessage(`{"id":42}`),
-			FetchedAt:  fetchedAt,
+			Source:      coreapi.SourceHackerNews,
+			ExternalID:  "42",
+			Title:       "Something interesting",
+			URL:         "https://example.test/42",
+			Score:       88,
+			NativeScore: 842,
+			RawPayload:  json.RawMessage(`{"id":42}`),
+			FetchedAt:   fetchedAt,
 		},
 		{
-			Source:     coreapi.SourceDevto,
-			ExternalID: "101",
-			Topic:      "Another thing",
-			URL:        "https://dev.to/a/101",
-			Score:      40,
-			RawPayload: json.RawMessage(`{"id":101}`),
-			FetchedAt:  fetchedAt,
+			Source:      coreapi.SourceDevto,
+			ExternalID:  "101",
+			Title:       "Another thing",
+			URL:         "https://dev.to/a/101",
+			Score:       40,
+			NativeScore: 456,
+			RawPayload:  json.RawMessage(`{"id":101}`),
+			FetchedAt:   fetchedAt,
 		},
 	})
 	if err != nil {
@@ -75,6 +77,15 @@ func TestIngestSignalsPostsBatch(t *testing.T) {
 	}
 	if !gotBody.Signals[0].FetchedAt.Equal(fetchedAt) {
 		t.Errorf("fetchedAt = %s, want %s", gotBody.Signals[0].FetchedAt, fetchedAt)
+	}
+	// The source's own count travels alongside the rescaled score; the API stores both.
+	if gotBody.Signals[0].NativeScore != 842 {
+		t.Errorf("nativeScore = %d, want the source's own count", gotBody.Signals[0].NativeScore)
+	}
+	// An unscoped poll names no topic, and the field must be absent rather than "".
+	if gotBody.Signals[0].TopicID != nil {
+		t.Errorf("topicId = %v, want it omitted when the poll is not topic-scoped",
+			*gotBody.Signals[0].TopicID)
 	}
 
 	if result.Received != 2 || result.Created != 1 || result.Updated != 1 {
@@ -113,8 +124,9 @@ func TestListSignalsFiltersBySource(t *testing.T) {
 		gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
 		respondJSON(t, w, http.StatusOK, `[{
 			"id":"6f2a1c3d-0b8e-4a17-9c55-2d1f7e4a8b90",
-			"source":"HACKER_NEWS","externalId":"42","topic":"Something","url":"https://example.test/42",
-			"score":88,"rawPayload":{"id":42},
+			"source":"HACKER_NEWS","externalId":"42","title":"Something","url":"https://example.test/42",
+			"topicId":"b1e8c4a2-7d35-4f16-8a90-3c2e5d7b1f04","topicName":"Local-first",
+			"score":88,"nativeScore":842,"rawPayload":{"id":42},
 			"fetchedAt":"2026-08-22T09:00:00Z","createdAt":"2026-08-22T09:00:00Z"
 		}]`)
 	})
@@ -132,6 +144,15 @@ func TestListSignalsFiltersBySource(t *testing.T) {
 	}
 	if signals[0].Score != 88 || signals[0].ExternalID != "42" {
 		t.Errorf("decoded signal = %+v", signals[0])
+	}
+	if signals[0].Title != "Something" {
+		t.Errorf("title = %q, want the renamed field to decode", signals[0].Title)
+	}
+	if signals[0].NativeScore != 842 {
+		t.Errorf("nativeScore = %d, want 842", signals[0].NativeScore)
+	}
+	if signals[0].TopicName == nil || *signals[0].TopicName != "Local-first" {
+		t.Errorf("topicName = %v, want the name the API resolved", signals[0].TopicName)
 	}
 }
 

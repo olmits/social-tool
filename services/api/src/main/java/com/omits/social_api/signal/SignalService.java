@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -63,13 +64,16 @@ public class SignalService {
             IngestSignalsCommand.Item item = entry.getValue();
             Signal signal = existing.get(entry.getKey());
             if (signal == null) {
-                toSave.add(new Signal(item.source(), item.externalId(), item.topic(), item.url(),
-                        item.score(), item.rawPayload().toString(), item.fetchedAt()));
+                toSave.add(new Signal(item.source(), item.externalId(), item.title(), item.topicId(),
+                        item.url(), item.score(), item.nativeScore(), item.rawPayload().toString(),
+                        item.fetchedAt()));
                 created++;
             } else {
-                signal.setTopic(item.topic());
+                signal.setTitle(item.title());
+                signal.setTopicId(item.topicId());
                 signal.setUrl(item.url());
                 signal.setScore(item.score());
+                signal.setNativeScore(item.nativeScore());
                 signal.setRawPayload(item.rawPayload().toString());
                 signal.setFetchedAt(item.fetchedAt());
                 toSave.add(signal);
@@ -81,11 +85,23 @@ public class SignalService {
         return new IngestSignalsResponse(command.signals().size(), created, updated);
     }
 
+    /**
+     * Stored signals, highest score first, narrowed by either filter or neither.
+     *
+     * <p>Both filters are applied in the query rather than in memory: the panel's default view
+     * is a single topic, and the {@code (topic_id, score desc)} index exists to serve exactly
+     * that.
+     */
     @Transactional(readOnly = true)
-    public List<Signal> list(SignalSource source) {
+    public List<Signal> list(UUID topicId, SignalSource source) {
+        if (topicId == null) {
+            return source == null
+                    ? signalRepository.findAllByOrderByScoreDesc()
+                    : signalRepository.findBySourceOrderByScoreDesc(source);
+        }
         return source == null
-                ? signalRepository.findAllByOrderByScoreDesc()
-                : signalRepository.findBySourceOrderByScoreDesc(source);
+                ? signalRepository.findByTopicIdOrderByScoreDesc(topicId)
+                : signalRepository.findByTopicIdAndSourceOrderByScoreDesc(topicId, source);
     }
 
     /**
@@ -115,8 +131,8 @@ public class SignalService {
         if (item.externalId() == null || item.externalId().isBlank()) {
             throw new IllegalArgumentException("externalId must not be blank");
         }
-        if (item.topic() == null || item.topic().isBlank()) {
-            throw new IllegalArgumentException("topic must not be blank");
+        if (item.title() == null || item.title().isBlank()) {
+            throw new IllegalArgumentException("title must not be blank");
         }
         if (item.url() == null || item.url().isBlank()) {
             throw new IllegalArgumentException("url must not be blank");
@@ -124,6 +140,11 @@ public class SignalService {
         if (item.score() < 0 || item.score() > 100) {
             throw new IllegalArgumentException(
                     "score must be between 0 and 100 (got %d)".formatted(item.score()));
+        }
+        // Unlike score, nativeScore has no ceiling — it is whatever the source counted.
+        if (item.nativeScore() < 0) {
+            throw new IllegalArgumentException(
+                    "nativeScore must not be negative (got %d)".formatted(item.nativeScore()));
         }
         // An empty object is a legitimate payload; a missing or JSON-null one is not.
         if (item.rawPayload() == null || item.rawPayload().isNull()) {

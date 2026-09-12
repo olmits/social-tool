@@ -67,8 +67,8 @@ func TestFetchReadsStoriesInRankOrder(t *testing.T) {
 	}
 	// Ranking is the listing's order, not the order the concurrent fetches completed in.
 	for i, want := range []string{"first", "second", "third"} {
-		if items[i].Topic != want {
-			t.Errorf("item %d topic = %q, want %q", i, items[i].Topic, want)
+		if items[i].Title != want {
+			t.Errorf("item %d title = %q, want %q", i, items[i].Title, want)
 		}
 	}
 	if items[0].ExternalID != "10" {
@@ -132,8 +132,8 @@ func TestFetchSkipsUnusableEntries(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected only the usable story, got %d items", len(items))
 	}
-	if items[0].Topic != "healthy" {
-		t.Errorf("topic = %q, want the one usable story", items[0].Topic)
+	if items[0].Title != "healthy" {
+		t.Errorf("topic = %q, want the one usable story", items[0].Title)
 	}
 }
 
@@ -156,7 +156,7 @@ func TestFetchSurvivesIndividualItemFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("one bad item should not fail the fetch: %v", err)
 	}
-	if len(items) != 1 || items[0].Topic != "survivor" {
+	if len(items) != 1 || items[0].Title != "survivor" {
 		t.Errorf("expected just the surviving story, got %+v", items)
 	}
 }

@@ -19,4 +19,8 @@ public interface SignalRepository extends JpaRepository<Signal, UUID> {
     List<Signal> findAllByOrderByScoreDesc();
 
     List<Signal> findBySourceOrderByScoreDesc(SignalSource source);
+
+    List<Signal> findByTopicIdOrderByScoreDesc(UUID topicId);
+
+    List<Signal> findByTopicIdAndSourceOrderByScoreDesc(UUID topicId, SignalSource source);
 }

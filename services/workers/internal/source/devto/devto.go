@@ -80,7 +80,7 @@ func (s *Source) Fetch(ctx context.Context) ([]source.Item, error) {
 		}
 		items = append(items, source.Item{
 			ExternalID:  strconv.Itoa(post.ID),
-			Topic:       post.Title,
+			Title:       post.Title,
 			URL:         post.URL,
 			NativeScore: post.PublicReactionsCount,
 			RawPayload:  payload,

@@ -23,8 +23,8 @@ type Item struct {
 	// dedup key the core API upserts on, so it must not embed anything that changes
 	// between runs (a rank or a timestamp would defeat deduplication).
 	ExternalID string
-	// Topic is the headline, used as drafting input.
-	Topic string
+	// Title is the headline, used as drafting input.
+	Title string
 	// URL is where the item lives.
 	URL string
 	// NativeScore is the source's own popularity count. Non-negative.
@@ -40,11 +40,16 @@ type Item struct {
 type Signal struct {
 	Source     string
 	ExternalID string
-	Topic      string
+	Title      string
 	URL        string
-	Score      int
-	RawPayload json.RawMessage
-	FetchedAt  time.Time
+	// Score is NativeScore rescaled to 0-100 within this batch, for ranking across sources.
+	Score int
+	// NativeScore is the source's own count, carried through unchanged. Normalization is
+	// lossy and one-way, so the panel could not recover this number from Score; it is what
+	// the radar shows as engagement, while Score is what it ranks by.
+	NativeScore int
+	RawPayload  json.RawMessage
+	FetchedAt   time.Time
 }
 
 // Source polls one content source.
@@ -81,13 +86,14 @@ func Normalize(name string, items []Item, fetchedAt time.Time) []Signal {
 	signals := make([]Signal, 0, len(items))
 	for _, item := range items {
 		signals = append(signals, Signal{
-			Source:     name,
-			ExternalID: item.ExternalID,
-			Topic:      item.Topic,
-			URL:        item.URL,
-			Score:      rescale(item.NativeScore, maxNative),
-			RawPayload: item.RawPayload,
-			FetchedAt:  fetchedAt,
+			Source:      name,
+			ExternalID:  item.ExternalID,
+			Title:       item.Title,
+			URL:         item.URL,
+			Score:       rescale(item.NativeScore, maxNative),
+			NativeScore: item.NativeScore,
+			RawPayload:  item.RawPayload,
+			FetchedAt:   fetchedAt,
 		})
 	}
 	return signals

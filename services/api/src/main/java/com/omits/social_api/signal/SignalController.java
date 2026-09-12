@@ -13,17 +13,20 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/signals")
 @RequiredArgsConstructor
 public class SignalController {
 
-    private final SignalService signalService;
+    private final RadarService radarService;
 
+    /** Stored signals ranked by score, narrowed by topic and/or source (both optional). */
     @GetMapping
-    public List<SignalResponse> list(@RequestParam(required = false) SignalSource source) {
-        return signalService.list(source).stream().map(SignalResponse::from).toList();
+    public List<SignalResponse> list(@RequestParam(required = false) UUID topicId,
+                                     @RequestParam(required = false) SignalSource source) {
+        return radarService.list(topicId, source);
     }
 
     /**
@@ -33,6 +36,6 @@ public class SignalController {
      */
     @PostMapping
     public IngestSignalsResponse ingest(@RequestBody IngestSignalsCommand command) {
-        return signalService.ingest(command);
+        return radarService.ingest(command);
     }
 }

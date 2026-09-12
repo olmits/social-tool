@@ -13,7 +13,7 @@ var fetchedAt = time.Date(2026, 8, 22, 9, 0, 0, 0, time.UTC)
 func item(id string, score int) source.Item {
 	return source.Item{
 		ExternalID:  id,
-		Topic:       "topic " + id,
+		Title:       "title " + id,
 		URL:         "https://example.test/" + id,
 		NativeScore: score,
 		RawPayload:  json.RawMessage(`{"id":"` + id + `"}`),
@@ -30,7 +30,7 @@ func TestNormalizeCarriesProvenanceAndFields(t *testing.T) {
 	if got.Source != "HACKER_NEWS" {
 		t.Errorf("source = %q, want HACKER_NEWS", got.Source)
 	}
-	if got.ExternalID != "1" || got.Topic != "topic 1" || got.URL != "https://example.test/1" {
+	if got.ExternalID != "1" || got.Title != "title 1" || got.URL != "https://example.test/1" {
 		t.Errorf("fields not carried through: %+v", got)
 	}
 	if !got.FetchedAt.Equal(fetchedAt) {
@@ -38,6 +38,28 @@ func TestNormalizeCarriesProvenanceAndFields(t *testing.T) {
 	}
 	if string(got.RawPayload) != `{"id":"1"}` {
 		t.Errorf("rawPayload = %s, want the item's payload verbatim", got.RawPayload)
+	}
+}
+
+// Normalization is lossy and one-way: the panel shows the source's own count as engagement
+// and cannot recover it from the rescaled score, so the raw number has to survive the batch.
+func TestNormalizeKeepsTheNativeScoreAlongsideTheRescaledOne(t *testing.T) {
+	signals := source.Normalize("HACKER_NEWS", []source.Item{
+		item("leader", 842),
+		item("trailer", 12),
+	}, fetchedAt)
+
+	if signals[0].NativeScore != 842 || signals[1].NativeScore != 12 {
+		t.Errorf("native scores = %d, %d; want them carried through untouched",
+			signals[0].NativeScore, signals[1].NativeScore)
+	}
+	// The leader is rescaled to 100 while keeping its real count — the two are independent.
+	if signals[0].Score != 100 {
+		t.Errorf("score = %d, want the batch leader rescaled to 100", signals[0].Score)
+	}
+	if signals[1].Score == signals[1].NativeScore {
+		t.Errorf("score and nativeScore both = %d; the rescale should have moved one",
+			signals[1].Score)
 	}
 }
 

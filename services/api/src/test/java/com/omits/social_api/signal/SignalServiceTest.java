@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,8 +40,9 @@ class SignalServiceTest {
     }
 
     private static IngestSignalsCommand.Item item(SignalSource source, String externalId) {
-        return new IngestSignalsCommand.Item(source, externalId, "topic " + externalId,
-                "https://example.test/" + externalId, 50, json("{\"id\":\"" + externalId + "\"}"), FETCHED_AT);
+        return new IngestSignalsCommand.Item(source, externalId, "title " + externalId, null,
+                "https://example.test/" + externalId, 50, 500,
+                json("{\"id\":\"" + externalId + "\"}"), FETCHED_AT);
     }
 
     private void stubNothingStored() {
@@ -72,13 +74,14 @@ class SignalServiceTest {
 
     @Test
     void refreshesAlreadyStoredSignalsInsteadOfDuplicating() {
-        Signal stored = new Signal(SignalSource.HACKER_NEWS, "1", "old topic",
-                "https://example.test/old", 10, "{\"id\":\"1\"}", FETCHED_AT.minusSeconds(3600));
+        Signal stored = new Signal(SignalSource.HACKER_NEWS, "1", "old title", null,
+                "https://example.test/old", 10, 100, "{\"id\":\"1\"}", FETCHED_AT.minusSeconds(3600));
         when(signalRepository.findBySourceAndExternalIdIn(any(), anyCollection())).thenReturn(List.of(stored));
 
+        UUID topicId = UUID.randomUUID();
         IngestSignalsCommand.Item incoming = new IngestSignalsCommand.Item(
-                SignalSource.HACKER_NEWS, "1", "new topic", "https://example.test/new", 90,
-                json("{\"id\":\"1\",\"score\":900}"), FETCHED_AT);
+                SignalSource.HACKER_NEWS, "1", "new title", topicId, "https://example.test/new", 90,
+                900, json("{\"id\":\"1\",\"score\":900}"), FETCHED_AT);
 
         IngestSignalsResponse response = signalService.ingest(new IngestSignalsCommand(List.of(incoming)));
 
@@ -90,10 +93,13 @@ class SignalServiceTest {
         List<Signal> saved = captureSaved();
         assertThat(saved).hasSize(1);
         assertThat(saved.getFirst()).isSameAs(stored);
-        assertThat(stored.getTopic()).isEqualTo("new topic");
+        assertThat(stored.getTitle()).isEqualTo("new title");
         assertThat(stored.getUrl()).isEqualTo("https://example.test/new");
         assertThat(stored.getScore()).isEqualTo(90);
+        assertThat(stored.getNativeScore()).isEqualTo(900);
         assertThat(stored.getFetchedAt()).isEqualTo(FETCHED_AT);
+        // A re-poll may also be the first time an item is attributed to a topic.
+        assertThat(stored.getTopicId()).isEqualTo(topicId);
     }
 
     @Test
@@ -117,8 +123,8 @@ class SignalServiceTest {
 
         IngestSignalsCommand.Item first = item(SignalSource.DEVTO, "7");
         IngestSignalsCommand.Item duplicate = new IngestSignalsCommand.Item(
-                SignalSource.DEVTO, "7", "winning topic", "https://example.test/7", 77,
-                json("{\"id\":\"7\"}"), FETCHED_AT);
+                SignalSource.DEVTO, "7", "winning title", null, "https://example.test/7", 77,
+                770, json("{\"id\":\"7\"}"), FETCHED_AT);
 
         IngestSignalsResponse response = signalService.ingest(
                 new IngestSignalsCommand(List.of(first, duplicate)));
@@ -129,7 +135,7 @@ class SignalServiceTest {
         List<Signal> saved = captureSaved();
         assertThat(saved).hasSize(1);
         // Last occurrence wins.
-        assertThat(saved.getFirst().getTopic()).isEqualTo("winning topic");
+        assertThat(saved.getFirst().getTitle()).isEqualTo("winning title");
     }
 
     @Test
@@ -175,8 +181,8 @@ class SignalServiceTest {
         // it would corrupt the cross-source ranking the score exists for.
         for (int score : new int[]{-1, 101}) {
             IngestSignalsCommand.Item bad = new IngestSignalsCommand.Item(
-                    SignalSource.DEVTO, "1", "topic", "https://example.test/1", score,
-                    json("{\"id\":1}"), FETCHED_AT);
+                    SignalSource.DEVTO, "1", "title", null, "https://example.test/1", score,
+                    500, json("{\"id\":1}"), FETCHED_AT);
 
             assertThatThrownBy(() -> signalService.ingest(new IngestSignalsCommand(List.of(bad))))
                     .isInstanceOf(IllegalArgumentException.class)
@@ -192,17 +198,19 @@ class SignalServiceTest {
 
         List<Case> cases = List.of(
                 new Case("null source", new IngestSignalsCommand.Item(
-                        null, "1", "topic", "https://example.test/1", 10, json("{}"), FETCHED_AT)),
+                        null, "1", "title", null, "https://example.test/1", 10, 5, json("{}"), FETCHED_AT)),
                 new Case("blank externalId", new IngestSignalsCommand.Item(
-                        SignalSource.DEVTO, " ", "topic", "https://example.test/1", 10, json("{}"), FETCHED_AT)),
-                new Case("blank topic", new IngestSignalsCommand.Item(
-                        SignalSource.DEVTO, "1", " ", "https://example.test/1", 10, json("{}"), FETCHED_AT)),
+                        SignalSource.DEVTO, " ", "title", null, "https://example.test/1", 10, 5, json("{}"), FETCHED_AT)),
+                new Case("blank title", new IngestSignalsCommand.Item(
+                        SignalSource.DEVTO, "1", " ", null, "https://example.test/1", 10, 5, json("{}"), FETCHED_AT)),
                 new Case("blank url", new IngestSignalsCommand.Item(
-                        SignalSource.DEVTO, "1", "topic", " ", 10, json("{}"), FETCHED_AT)),
+                        SignalSource.DEVTO, "1", "title", null, " ", 10, 5, json("{}"), FETCHED_AT)),
+                new Case("negative nativeScore", new IngestSignalsCommand.Item(
+                        SignalSource.DEVTO, "1", "title", null, "https://example.test/1", 10, -1, json("{}"), FETCHED_AT)),
                 new Case("null rawPayload", new IngestSignalsCommand.Item(
-                        SignalSource.DEVTO, "1", "topic", "https://example.test/1", 10, null, FETCHED_AT)),
+                        SignalSource.DEVTO, "1", "title", null, "https://example.test/1", 10, 5, null, FETCHED_AT)),
                 new Case("null fetchedAt", new IngestSignalsCommand.Item(
-                        SignalSource.DEVTO, "1", "topic", "https://example.test/1", 10, json("{}"), null)));
+                        SignalSource.DEVTO, "1", "title", null, "https://example.test/1", 10, 5, json("{}"), null)));
 
         for (Case testCase : cases) {
             assertThatThrownBy(() -> signalService.ingest(new IngestSignalsCommand(List.of(testCase.item()))))
@@ -218,7 +226,7 @@ class SignalServiceTest {
         // half-stored.
         IngestSignalsCommand.Item valid = item(SignalSource.DEVTO, "1");
         IngestSignalsCommand.Item invalid = new IngestSignalsCommand.Item(
-                SignalSource.DEVTO, "2", "topic", "https://example.test/2", 500, json("{}"), FETCHED_AT);
+                SignalSource.DEVTO, "2", "title", null, "https://example.test/2", 500, 5, json("{}"), FETCHED_AT);
 
         assertThatThrownBy(() -> signalService.ingest(new IngestSignalsCommand(List.of(valid, invalid))))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -228,16 +236,34 @@ class SignalServiceTest {
     // --- list -----------------------------------------------------------------
 
     @Test
-    void listsEverySignalWhenNoSourceGiven() {
-        signalService.list(null);
+    void listsEverySignalWhenNoFilterGiven() {
+        signalService.list(null, null);
 
         verify(signalRepository).findAllByOrderByScoreDesc();
     }
 
     @Test
     void listsBySourceWhenGiven() {
-        signalService.list(SignalSource.HACKER_NEWS);
+        signalService.list(null, SignalSource.HACKER_NEWS);
 
         verify(signalRepository).findBySourceOrderByScoreDesc(SignalSource.HACKER_NEWS);
+    }
+
+    @Test
+    void listsByTopicWhenGiven() {
+        UUID topicId = UUID.randomUUID();
+
+        signalService.list(topicId, null);
+
+        verify(signalRepository).findByTopicIdOrderByScoreDesc(topicId);
+    }
+
+    @Test
+    void listsByTopicAndSourceWhenBothGiven() {
+        UUID topicId = UUID.randomUUID();
+
+        signalService.list(topicId, SignalSource.DEVTO);
+
+        verify(signalRepository).findByTopicIdAndSourceOrderByScoreDesc(topicId, SignalSource.DEVTO);
     }
 }

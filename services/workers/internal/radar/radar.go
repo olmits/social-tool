@@ -189,13 +189,14 @@ func toWire(signals []source.Signal) []coreapi.Signal {
 	wire := make([]coreapi.Signal, 0, len(signals))
 	for _, s := range signals {
 		wire = append(wire, coreapi.Signal{
-			Source:     coreapi.SignalSource(s.Source),
-			ExternalID: s.ExternalID,
-			Topic:      s.Topic,
-			URL:        s.URL,
-			Score:      s.Score,
-			RawPayload: s.RawPayload,
-			FetchedAt:  s.FetchedAt,
+			Source:      coreapi.SignalSource(s.Source),
+			ExternalID:  s.ExternalID,
+			Title:       s.Title,
+			URL:         s.URL,
+			Score:       s.Score,
+			NativeScore: s.NativeScore,
+			RawPayload:  s.RawPayload,
+			FetchedAt:   s.FetchedAt,
 		})
 	}
 	return wire

@@ -105,7 +105,7 @@ func (s *Source) Fetch(ctx context.Context) ([]source.Item, error) {
 		}
 		items = append(items, source.Item{
 			ExternalID:  repo.FullName,
-			Topic:       topic(repo),
+			Title:       title(repo),
 			URL:         repo.HTMLURL,
 			NativeScore: repo.StargazersCount,
 			RawPayload:  payload,
@@ -148,9 +148,9 @@ func (s *Source) get(ctx context.Context, endpoint string, out any) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-// topic renders a repository as a headline. The name alone ("owner/repo") is too terse to
+// title renders a repository as a headline. The name alone ("owner/repo") is too terse to
 // draft from, so the description is appended when there is one.
-func topic(repo repository) string {
+func title(repo repository) string {
 	description := strings.TrimSpace(repo.Description)
 	if description == "" {
 		return repo.FullName
