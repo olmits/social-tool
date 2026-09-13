@@ -252,7 +252,7 @@ func TestMarkFailedAlwaysSendsJsonObject(t *testing.T) {
 			if len(raw) == 0 {
 				t.Fatal("request body was empty, want a JSON object")
 			}
-			if _, present := gotBody["reason"]; !present {
+			if _, ok := gotBody["reason"]; !ok {
 				t.Errorf("body = %s, want a reason field", raw)
 			}
 			if gotBody["reason"] != tt.wantReason {

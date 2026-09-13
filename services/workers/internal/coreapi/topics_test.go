@@ -57,7 +57,7 @@ func TestListTopicQueriesLeavesUnnamedSourcesAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTopicQueries: %v", err)
 	}
-	if _, present := topics[0].Queries[coreapi.SourceGitHubTrending]; present {
+	if _, ok := topics[0].Queries[coreapi.SourceGitHubTrending]; ok {
 		t.Error("a source with no query should be absent from the map, not present and empty")
 	}
 }

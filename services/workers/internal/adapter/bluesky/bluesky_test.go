@@ -120,7 +120,7 @@ func TestPostSendsSessionThenRecord(t *testing.T) {
 		t.Errorf("record createdAt %q is not RFC3339: %v", createdAt, err)
 	}
 	// A top-level post carries no reply reference.
-	if _, present := record["reply"]; present {
+	if _, ok := record["reply"]; ok {
 		t.Errorf("record carried a reply field: %v", record)
 	}
 }

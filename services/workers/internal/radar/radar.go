@@ -191,8 +191,8 @@ func (r *Radar) plan(topics []coreapi.TopicQueries) map[string][]fetch {
 		// Sorted so a pass polls in the same order every time, which makes two runs'
 		// logs comparable. Map iteration order alone would not.
 		for _, name := range slices.Sorted(maps.Keys(topic.Queries)) {
-			src, running := r.sources[string(name)]
-			if !running {
+			src, ok := r.sources[string(name)]
+			if !ok {
 				// A topic may name a source this worker does not run: one left out of
 				// RADAR_SOURCES, or one the core API knows and the poller does not
 				// (Reddit, Product Hunt). The topic is simply not polled there, which is

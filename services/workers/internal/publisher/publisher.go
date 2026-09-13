@@ -173,8 +173,8 @@ func (p *Publisher) publish(ctx context.Context, draft coreapi.Draft) {
 
 // open resolves everything needed to publish a draft and authenticates with the platform.
 func (p *Publisher) open(ctx context.Context, draft coreapi.Draft) (adapter.Adapter, error) {
-	factory, registered := p.adapters[draft.Platform]
-	if !registered {
+	factory, ok := p.adapters[draft.Platform]
+	if !ok {
 		return nil, fmt.Errorf("no adapter registered for platform %s", draft.Platform)
 	}
 

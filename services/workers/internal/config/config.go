@@ -191,8 +191,8 @@ func validateURL(key, value string) error {
 
 // durationFromEnv overwrites target when key is set to a valid positive duration.
 func durationFromEnv(key string, target *time.Duration) error {
-	raw, set := os.LookupEnv(key)
-	if !set || raw == "" {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
 		return nil
 	}
 
@@ -239,8 +239,8 @@ func radarSources(raw string) ([]string, error) {
 
 // intFromEnv overwrites target when key is set to a valid positive integer.
 func intFromEnv(key string, target *int) error {
-	raw, set := os.LookupEnv(key)
-	if !set || raw == "" {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
 		return nil
 	}
 

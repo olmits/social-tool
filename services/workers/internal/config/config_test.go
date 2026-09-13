@@ -71,7 +71,7 @@ func TestLoadRejectsBadValues(t *testing.T) {
 			}
 			// t.Setenv cannot unset, so make sure the required key is absent when the
 			// test is specifically about it being missing.
-			if _, set := tt.env["CORE_API_KEY"]; !set {
+			if _, ok := tt.env["CORE_API_KEY"]; !ok {
 				t.Setenv("CORE_API_KEY", "")
 			}
 
