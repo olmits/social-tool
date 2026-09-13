@@ -1,11 +1,12 @@
 "use client";
 
-import { BarChart3, CalendarDays, ListChecks, Radar } from "lucide-react";
+import { BarChart3, CalendarDays, ListChecks, Radar, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const TAB_ITEMS = [
+  { href: "/topics", label: "Topics", icon: Tags },
   { href: "/radar", label: "Radar", icon: Radar },
   { href: "/review", label: "Review", icon: ListChecks },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },

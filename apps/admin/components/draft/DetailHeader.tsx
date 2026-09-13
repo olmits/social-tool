@@ -1,6 +1,5 @@
-import { platformLabel } from "@/lib/api/mappers";
+import { PLATFORM_META, platformLabel } from "@/lib/api/mappers";
 import type { DraftResponse } from "@/lib/api/types";
-import { PLATFORM_META } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 

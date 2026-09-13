@@ -1,5 +1,5 @@
+import { PLATFORM_META } from "@/lib/api/mappers";
 import type { DraftResponse } from "@/lib/api/types";
-import { PLATFORM_META } from "@/lib/mock-data";
 import { formatTimeUtc } from "./scheduleWeek";
 
 /** A single scheduled draft on the calendar: time, content excerpt, account. */

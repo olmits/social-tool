@@ -3,8 +3,8 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PLATFORM_META } from "@/lib/api/mappers";
 import type { DraftResponse } from "@/lib/api/types";
-import { PLATFORM_META } from "@/lib/mock-data";
 import { EventCard } from "./EventCard";
 import { formatDayLabel } from "./scheduleWeek";
 import { useScheduleCalendar } from "./useScheduleCalendar";

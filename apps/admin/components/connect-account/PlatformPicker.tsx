@@ -1,6 +1,6 @@
 "use client";
 
-import { PLATFORM_META } from "@/lib/mock-data";
+import { PLATFORM_META } from "@/lib/api/mappers";
 import {
   PLATFORM_CONNECT_FIELDS,
   PLATFORM_CONNECT_ORDER,

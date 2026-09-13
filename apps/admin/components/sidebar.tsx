@@ -10,6 +10,7 @@ import {
   LogOut,
   Plus,
   Radar,
+  Tags,
   TriangleAlert,
   Unlink,
   Users,
@@ -20,12 +21,14 @@ import { useState, useTransition } from "react";
 import { useAccountState } from "@/context/account-context";
 import { useAccountActions } from "@/lib/actions/useAccountActions";
 import { disconnectAccountAction } from "@/lib/api/actions";
-import { accountLabel, platformLabel } from "@/lib/api/mappers";
-import { PLATFORM_META } from "@/lib/mock-data";
+import { accountLabel, PLATFORM_META, platformLabel } from "@/lib/api/mappers";
 import type { Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// Topics first: they configure the radar, and an empty topic list is why an
+// empty radar is not a bug.
 const NAV_ITEMS = [
+  { href: "/topics", label: "Topics", icon: Tags },
   {
     href: "/radar",
     label: "Trend Radar",

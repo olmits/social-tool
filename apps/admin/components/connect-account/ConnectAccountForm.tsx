@@ -2,9 +2,9 @@
 
 import { Loader2 } from "lucide-react";
 import { ControlledTextField } from "@/components/form/ControlledTextField";
+import { FormError } from "@/components/form/FormError";
 import { Button } from "@/components/ui/button";
 import { CredentialField } from "./CredentialField";
-import { FormError } from "./FormError";
 import { PlatformPicker } from "./PlatformPicker";
 import { useConnectAccountForm } from "./useConnectAccountForm";
 
