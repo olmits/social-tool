@@ -91,6 +91,22 @@ Topics form should not offer Reddit or Product Hunt yet.
 
 ---
 
+## Status — Phases 1–5 delivered
+
+Everything below is built, against a local API rebuilt to the current `topic`/`signal` slices.
+Two decisions differ from the plan as written, both noted at their task:
+
+- **Task 14's stat tiles are scoped to the topic, not to the source chip** — the radar page
+  fetches a second, source-unfiltered list for them. "Sources active: 1" whenever a source chip
+  is on is a tautology, not a statistic. Without a source filter it is the same fetch.
+- **Task 15's Draft button renders `disabled`, with the reason on it**, rather than inert-but-
+  clickable like Review's Regenerate. It is the card's primary action; one that looks live and
+  does nothing on click is worse than one that says why.
+
+Only task 15 remains, still blocked on the two backend items below.
+
+---
+
 ## A naming note, before anything else
 
 The mock already uses the vocabulary the backend is moving to:
@@ -148,11 +164,11 @@ carries.
    appended to the existing `lib/api/actions.ts`; accounts and drafts already share that one
    file, so a separate topics module would be the first split. Wrap the calls, return
    `ActionResult`, `updateTag(TOPICS_TAG)`, and surface `ApiError.message` — `toActionError`
-   already does this — rather than switching on status. A duplicate topic name is **not**
-   reliably a 409: `GlobalExceptionHandler` maps `IllegalArgumentException` to 400 and only
-   explicitly registered exception types to 409, and the topic slice does not exist yet, so
-   neither does such a type. The API plan now asks for one; until it lands, do not branch on
-   the status code.
+   already does this — rather than switching on status. ~~A duplicate topic name is **not**
+   reliably a 409.~~ **It is now:** `DuplicateTopicException` exists and
+   `GlobalExceptionHandler` registers it for 409. No branching was needed even so — the
+   exception's message already names the clash ("A topic named X already exists"), so the form
+   surfaces `message` and the status never has to be read.
 5. **Display helpers** — add `sourceLabel()`, per-source badge metadata, and
    `engagementLabel(source, nativeScore)` to `lib/api/mappers.ts`, alongside the existing
    `statusLabel` / `charLimit`. `engagementLabel` is where the per-source unit lives —
@@ -234,9 +250,9 @@ carries.
 ## Blocked on backend — do not start until the endpoint exists
 
 - ~~**Everything in Phases 1, 3, and 4** depends on `services/api/RADAR_PLAN.md` Phase 1.~~
-  **Cleared** — that slice is delivered. What remains is the worker-side half: until the poller
-  reads `GET /topics/queries`, signals arrive with a null `topicId`, so a topic-filtered view
-  is correct but empty.
+  **Fully cleared** — both halves are delivered. The poller reads `GET /topics/queries` and
+  stamps every signal with its topic, so a topic-filtered view returns real rows. Nothing in
+  Phases 1–4 is waiting on the backend any more, except task 15 below.
 - **Task 15, "Draft a post" from a signal — blocked twice over.** Both have to clear:
   1. `drafting/` is still an empty package, so there is nothing that turns a signal into
      draft text.
