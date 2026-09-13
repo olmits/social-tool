@@ -13,10 +13,15 @@ import {
   scheduleDraft,
 } from "./drafts";
 import { toUiAccount, type UiAccount } from "./mappers";
+import { SIGNALS_TAG } from "./signals";
+import { createTopic, deleteTopic, TOPICS_TAG, updateTopic } from "./topics";
 import type {
   CreateDraftCommand,
+  CreateTopicCommand,
   DraftResponse,
   EditDraftCommand,
+  TopicResponse,
+  UpdateTopicCommand,
 } from "./types";
 
 /** Discriminated result so client callers can render errors without an error boundary. */
@@ -140,4 +145,65 @@ export async function scheduleDraftAction(
   } catch (err) {
     return toActionError(err, "Failed to schedule draft.");
   }
+}
+
+/**
+ * `POST /topics`. A duplicate name comes back as a 409 whose message already
+ * names the clash ("A topic named X already exists"), so callers surface
+ * `message` rather than branching on the status.
+ */
+export async function createTopicAction(
+  command: CreateTopicCommand,
+): Promise<ActionResult<TopicResponse>> {
+  try {
+    const topic = await createTopic(command);
+    updateTag(TOPICS_TAG);
+    return { ok: true, data: topic };
+  } catch (err) {
+    return toActionError(err, "Failed to create topic.");
+  }
+}
+
+/**
+ * `PATCH /topics/{id}`. A sparse patch — send only what changed: the enabled
+ * toggle sends `{ enabled }` alone, the edit form sends name and queries.
+ */
+export async function updateTopicAction(
+  id: string,
+  command: UpdateTopicCommand,
+): Promise<ActionResult<TopicResponse>> {
+  try {
+    const topic = await updateTopic(id, command);
+    updateTag(TOPICS_TAG);
+    return { ok: true, data: topic };
+  } catch (err) {
+    return toActionError(err, "Failed to save topic.");
+  }
+}
+
+/**
+ * `DELETE /topics/{id}`. Also expires the signals cache: signals already
+ * collected for the topic are kept, but `topicName` is resolved server-side and
+ * goes null with the topic, so a cached list would keep rendering a chip for a
+ * topic that no longer exists.
+ */
+export async function deleteTopicAction(id: string): Promise<ActionResult> {
+  try {
+    await deleteTopic(id);
+    updateTag(TOPICS_TAG);
+    updateTag(SIGNALS_TAG);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return toActionError(err, "Failed to delete topic.");
+  }
+}
+
+/**
+ * Re-reads what the poller has already stored. It does **not** trigger a radar
+ * run: polling is the Go worker's job, on `RADAR_INTERVAL` (and EventBridge in
+ * production), and there is no manual-trigger endpoint to call.
+ */
+export async function refreshSignalsAction(): Promise<ActionResult> {
+  updateTag(SIGNALS_TAG);
+  return { ok: true, data: undefined };
 }

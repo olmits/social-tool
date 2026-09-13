@@ -200,9 +200,9 @@ would be lost by merging batches back together before normalizing.
 
 ## Phase 3 — RSS as the generic source (optional)
 
-7. **`V10__feeds.sql`** — `feeds (id, topic_id, url, name, enabled)`.
-8. **`feed/` slice** — CRUD, so feeds are managed from the panel like topics.
-9. **`SignalSource.RSS`** — one more enum value; the ingest path is unchanged.
+8. **`V10__feeds.sql`** — `feeds (id, topic_id, url, name, enabled)`.
+9. **`feed/` slice** — CRUD, so feeds are managed from the panel like topics.
+10. **`SignalSource.RSS`** — one more enum value; the ingest path is unchanged.
 
 Scoring for RSS signals is recency plus topic match only; the `score` column stays, but an RSS
 signal's score is not comparable to a Hacker News one. Worth deciding at that point whether

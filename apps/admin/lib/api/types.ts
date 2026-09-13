@@ -95,3 +95,85 @@ export interface ScheduleDraftCommand {
 export interface ApiErrorBody {
   message: string;
 }
+
+/**
+ * A content source the trend radar polls. Mirrors the backend enum
+ * (…/signal/model/SignalSource.java).
+ *
+ * `REDDIT` and `PRODUCT_HUNT` are declared but never polled — neither has a
+ * `Source` implementation in the Go worker. Use {@link SIGNAL_SOURCES} in
+ * lib/api/mappers.ts wherever the UI offers a choice, so the panel never shows a
+ * filter or a query field that can only ever return nothing.
+ */
+export type SignalSource =
+  | "HACKER_NEWS"
+  | "DEVTO"
+  | "GITHUB_TRENDING"
+  | "REDDIT"
+  | "PRODUCT_HUNT";
+
+/**
+ * Per-source search queries for a topic. A source absent from the map is not
+ * polled for that topic, so this is a partial record, not a full one.
+ */
+export type TopicQueries = Partial<Record<SignalSource, string>>;
+
+export interface TopicResponse {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** Ordered by source name server-side, so the list doesn't reshuffle per request. */
+  queries: TopicQueries;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTopicCommand {
+  name: string;
+  /** Null means enabled — a topic is created to be polled. */
+  enabled: boolean | null;
+  /** Null or empty creates a topic that is polled nowhere until queries are added. */
+  queries: TopicQueries | null;
+}
+
+/**
+ * A **sparse** patch, unlike {@link EditDraftCommand}: a null field is left
+ * unchanged, so the enabled toggle sends `{ enabled: false }` alone rather than
+ * resending a name and queries it never read.
+ *
+ * `queries` is replace-not-merge when present — a map of two entries leaves the
+ * topic with exactly those two, and an empty map clears them.
+ */
+export interface UpdateTopicCommand {
+  name?: string | null;
+  enabled?: boolean | null;
+  queries?: TopicQueries | null;
+}
+
+/**
+ * A trend-radar signal: one item the poller found for a topic on a source.
+ *
+ * Note `fetchedAt` vs `createdAt` — `ingest` refreshes `fetchedAt` on every
+ * re-poll, so it means *last seen*. A signal's age is `createdAt`, the
+ * first-sighting timestamp.
+ */
+export interface SignalResponse {
+  id: string;
+  source: SignalSource;
+  externalId: string;
+  /** The item's headline. */
+  title: string;
+  /** Null for a signal polled before topics existed, or whose topic was deleted. */
+  topicId: string | null;
+  /** Resolved server-side, so the panel does no id→name join. Null exactly when `topicId` is. */
+  topicName: string | null;
+  url: string;
+  /** Popularity normalized to 0-100 within its own `(topic, source)` batch — the "match". */
+  score: number;
+  /** The source's own count behind the score — points, reactions, stars. Unit differs per source. */
+  nativeScore: number;
+  /** Raw source JSON as a *string*. The panel does not consume it. */
+  rawPayload: string;
+  createdAt: string;
+  fetchedAt: string;
+}
