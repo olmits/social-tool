@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestFetchReadsRepositories(t *testing.T) {
 		{"full_name":"acme/plain","description":"","html_url":"https://github.com/acme/plain","stargazers_count":300}
 	]}`)
 
-	items, err := newSource(server, 50, 7, "").Fetch(context.Background())
+	items, err := newSource(server, 50, 7, "").Fetch(context.Background(), "language:go")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestFetchReadsRepositories(t *testing.T) {
 func TestFetchSendsSearchParametersAndHeaders(t *testing.T) {
 	server, captured := stubAPI(t, `{"items":[]}`)
 
-	if _, err := newSource(server, 25, 7, "").Fetch(context.Background()); err != nil {
+	if _, err := newSource(server, 25, 7, "").Fetch(context.Background(), "language:go"); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -87,10 +88,29 @@ func TestFetchSendsSearchParametersAndHeaders(t *testing.T) {
 	}
 }
 
+// The topic's qualifiers and the source's recency window have to end up in one q value:
+// the qualifiers say what the subject is, the window is what makes it "trending".
+func TestFetchCombinesTheTopicQueryWithTheWindow(t *testing.T) {
+	server, captured := stubAPI(t, `{"items":[]}`)
+
+	if _, err := newSource(server, 50, 7, "").Fetch(context.Background(), "language:go topic:cli"); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	q, err := url.ParseQuery(captured.query)
+	if err != nil {
+		t.Fatalf("parse captured query: %v", err)
+	}
+	got := q.Get("q")
+	if !strings.HasPrefix(got, "language:go topic:cli created:>") {
+		t.Errorf("q = %q, want the topic's qualifiers followed by the window", got)
+	}
+}
+
 func TestFetchSendsTokenWhenConfigured(t *testing.T) {
 	server, captured := stubAPI(t, `{"items":[]}`)
 
-	if _, err := newSource(server, 50, 7, "ghp_secret").Fetch(context.Background()); err != nil {
+	if _, err := newSource(server, 50, 7, "ghp_secret").Fetch(context.Background(), "language:go"); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -102,7 +122,7 @@ func TestFetchSendsTokenWhenConfigured(t *testing.T) {
 func TestFetchOmitsAuthorizationWithoutToken(t *testing.T) {
 	server, captured := stubAPI(t, `{"items":[]}`)
 
-	if _, err := newSource(server, 50, 7, "").Fetch(context.Background()); err != nil {
+	if _, err := newSource(server, 50, 7, "").Fetch(context.Background(), "language:go"); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -118,7 +138,7 @@ func TestFetchSkipsIncompleteRepositories(t *testing.T) {
 		{"full_name":"acme/good","html_url":"https://github.com/acme/good","stargazers_count":10}
 	]}`)
 
-	items, err := newSource(server, 50, 7, "").Fetch(context.Background())
+	items, err := newSource(server, 50, 7, "").Fetch(context.Background(), "language:go")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -140,7 +160,7 @@ func TestFetchNamesRateLimiting(t *testing.T) {
 			server := httptest.NewServer(mux)
 			t.Cleanup(server.Close)
 
-			_, err := newSource(server, 50, 7, "").Fetch(context.Background())
+			_, err := newSource(server, 50, 7, "").Fetch(context.Background(), "language:go")
 			if err == nil {
 				t.Fatalf("expected an error for status %d", status)
 			}

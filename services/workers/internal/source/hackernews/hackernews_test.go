@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,64 +14,53 @@ import (
 	"github.com/olmits/social-tool/services/workers/internal/source/hackernews"
 )
 
-// stubAPI serves the two Firebase endpoints the source reads. Items are keyed by id;
-// an id present in topstories but missing from items serves a JSON null, which is how the
-// real API reports a deleted story.
-func stubAPI(t *testing.T, topStories string, items map[int]string) *httptest.Server {
+// stubAPI serves the Algolia search endpoint, capturing the query the source sent.
+func stubAPI(t *testing.T, body string) (*httptest.Server, *string) {
 	t.Helper()
 
+	var rawQuery string
 	mux := http.NewServeMux()
-	mux.HandleFunc("/topstories.json", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, topStories)
-	})
-	mux.HandleFunc("/item/", func(w http.ResponseWriter, r *http.Request) {
-		var id int
-		if _, err := fmt.Sscanf(strings.TrimPrefix(r.URL.Path, "/item/"), "%d.json", &id); err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
-			return
-		}
-		body, ok := items[id]
-		if !ok {
-			fmt.Fprint(w, "null")
-			return
-		}
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		rawQuery = r.URL.RawQuery
 		fmt.Fprint(w, body)
 	})
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
-	return server
+	return server, &rawQuery
 }
 
-func story(id int, title, url string, score int) string {
-	return fmt.Sprintf(`{"id":%d,"type":"story","title":%q,"url":%q,"score":%d}`, id, title, url, score)
+func hits(entries ...string) string {
+	return `{"hits":[` + strings.Join(entries, ",") + `]}`
+}
+
+func story(id int, title, url string, points int) string {
+	return fmt.Sprintf(`{"objectID":"%d","title":%q,"url":%q,"points":%d}`, id, title, url, points)
 }
 
 func newSource(t *testing.T, server *httptest.Server, limit int) *hackernews.Source {
 	t.Helper()
-	return hackernews.New(&http.Client{Timeout: 5 * time.Second}, server.URL, limit)
+	return hackernews.New(&http.Client{Timeout: 5 * time.Second}, server.URL, limit, 7)
 }
 
-func TestFetchReadsStoriesInRankOrder(t *testing.T) {
-	server := stubAPI(t, `[10,20,30]`, map[int]string{
-		10: story(10, "first", "https://example.test/a", 300),
-		20: story(20, "second", "https://example.test/b", 200),
-		30: story(30, "third", "https://example.test/c", 100),
-	})
+func TestFetchReadsStories(t *testing.T) {
+	server, _ := stubAPI(t, hits(
+		story(10, "Rust async internals", "https://example.test/a", 300),
+		story(20, "Tokio 2.0", "https://example.test/b", 200),
+	))
 
-	items, err := newSource(t, server, 50).Fetch(context.Background())
+	items, err := newSource(t, server, 50).Fetch(context.Background(), "rust async")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
-	if len(items) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(items))
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
 	}
-	// Ranking is the listing's order, not the order the concurrent fetches completed in.
-	for i, want := range []string{"first", "second", "third"} {
-		if items[i].Title != want {
-			t.Errorf("item %d title = %q, want %q", i, items[i].Title, want)
-		}
+	// Algolia's hit order is kept: it is relevance-ranked, and the radar rescales by
+	// points separately rather than re-sorting here.
+	if items[0].Title != "Rust async internals" {
+		t.Errorf("title = %q, want the first hit", items[0].Title)
 	}
 	if items[0].ExternalID != "10" {
 		t.Errorf("externalID = %q, want the HN item number", items[0].ExternalID)
@@ -77,33 +68,55 @@ func TestFetchReadsStoriesInRankOrder(t *testing.T) {
 	if items[0].NativeScore != 300 {
 		t.Errorf("nativeScore = %d, want the raw HN points", items[0].NativeScore)
 	}
+	if string(items[0].RawPayload) == "" {
+		t.Error("rawPayload should carry the hit's original JSON")
+	}
 }
 
-func TestFetchHonoursLimit(t *testing.T) {
-	server := stubAPI(t, `[1,2,3,4,5]`, map[int]string{
-		1: story(1, "one", "https://example.test/1", 10),
-		2: story(2, "two", "https://example.test/2", 9),
-		3: story(3, "three", "https://example.test/3", 8),
-		4: story(4, "four", "https://example.test/4", 7),
-		5: story(5, "five", "https://example.test/5", 6),
-	})
+// The query is the whole reason this source moved off the Firebase API, so it has to reach
+// Algolia — along with the filters that keep a trend radar from surfacing 2013 classics.
+func TestFetchSendsTheTopicQueryAndFilters(t *testing.T) {
+	server, raw := stubAPI(t, hits())
 
-	items, err := newSource(t, server, 2).Fetch(context.Background())
-	if err != nil {
+	if _, err := newSource(t, server, 25).Fetch(context.Background(), "rust async"); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected the limit to cap the batch at 2, got %d", len(items))
+
+	sent, err := url.ParseQuery(*raw)
+	if err != nil {
+		t.Fatalf("parse captured query: %v", err)
+	}
+	if got := sent.Get("query"); got != "rust async" {
+		t.Errorf("query = %q, want the topic's terms", got)
+	}
+	if got := sent.Get("tags"); got != "story" {
+		t.Errorf("tags = %q, want only submissions — comments are not drafting material", got)
+	}
+	if got := sent.Get("hitsPerPage"); got != "25" {
+		t.Errorf("hitsPerPage = %q, want the configured limit", got)
+	}
+
+	// The window is relative to now, so assert its shape and that it is in the recent past
+	// rather than pinning a timestamp.
+	filter := sent.Get("numericFilters")
+	cutoff, ok := strings.CutPrefix(filter, "created_at_i>")
+	if !ok {
+		t.Fatalf("numericFilters = %q, want a created_at_i lower bound", filter)
+	}
+	seconds, err := strconv.ParseInt(cutoff, 10, 64)
+	if err != nil {
+		t.Fatalf("numericFilters cutoff %q is not a unix timestamp: %v", cutoff, err)
+	}
+	if age := time.Since(time.Unix(seconds, 0)); age < 6*24*time.Hour || age > 8*24*time.Hour {
+		t.Errorf("cutoff is %s old, want roughly the configured 7-day window", age)
 	}
 }
 
 func TestFetchFallsBackToItemURLForTextPosts(t *testing.T) {
 	// Ask HN and Show HN text posts carry no url; the signal still needs somewhere to point.
-	server := stubAPI(t, `[42]`, map[int]string{
-		42: `{"id":42,"type":"story","title":"Ask HN: what are you building?","score":80}`,
-	})
+	server, _ := stubAPI(t, hits(`{"objectID":"42","title":"Ask HN: what are you building?","url":null,"points":80}`))
 
-	items, err := newSource(t, server, 50).Fetch(context.Background())
+	items, err := newSource(t, server, 50).Fetch(context.Background(), "side projects")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -115,16 +128,17 @@ func TestFetchFallsBackToItemURLForTextPosts(t *testing.T) {
 	}
 }
 
-func TestFetchSkipsUnusableEntries(t *testing.T) {
-	// A deleted story (null), a comment, and a dead story all appear in listings but are
-	// not drafting material. Losing them must not cost the healthy story alongside them.
-	server := stubAPI(t, `[1,2,3,4]`, map[int]string{
-		2: `{"id":2,"type":"comment","text":"a reply"}`,
-		3: `{"id":3,"type":"story","title":"flagged","url":"https://example.test/x","score":5,"dead":true}`,
-		4: story(4, "healthy", "https://example.test/ok", 120),
-	})
+func TestFetchSkipsUnusableHits(t *testing.T) {
+	// A hit with no title cannot become a usable signal, and one of the wrong shape should
+	// not cost the healthy story alongside it.
+	server, _ := stubAPI(t, hits(
+		`{"objectID":"1","title":"","url":"https://example.test/1","points":10}`,
+		`{"objectID":"","title":"No id","url":"https://example.test/2","points":10}`,
+		`"not an object"`,
+		story(4, "healthy", "https://example.test/ok", 120),
+	))
 
-	items, err := newSource(t, server, 50).Fetch(context.Background())
+	items, err := newSource(t, server, 50).Fetch(context.Background(), "go")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -133,55 +147,43 @@ func TestFetchSkipsUnusableEntries(t *testing.T) {
 		t.Fatalf("expected only the usable story, got %d items", len(items))
 	}
 	if items[0].Title != "healthy" {
-		t.Errorf("topic = %q, want the one usable story", items[0].Title)
+		t.Errorf("title = %q, want the one usable story", items[0].Title)
 	}
 }
 
-func TestFetchSurvivesIndividualItemFailures(t *testing.T) {
-	// One item endpoint erroring should cost that story, not the run.
-	mux := http.NewServeMux()
-	mux.HandleFunc("/topstories.json", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `[1,2]`)
-	})
-	mux.HandleFunc("/item/1.json", func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "boom", http.StatusInternalServerError)
-	})
-	mux.HandleFunc("/item/2.json", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, story(2, "survivor", "https://example.test/ok", 50))
-	})
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
+func TestFetchReturnsNothingForAQueryWithNoMatches(t *testing.T) {
+	// An ordinary outcome for a narrow topic, and not an error.
+	server, _ := stubAPI(t, hits())
 
-	items, err := newSource(t, server, 50).Fetch(context.Background())
+	items, err := newSource(t, server, 50).Fetch(context.Background(), "a topic nobody posts about")
 	if err != nil {
-		t.Fatalf("one bad item should not fail the fetch: %v", err)
+		t.Fatalf("an empty result should not be an error: %v", err)
 	}
-	if len(items) != 1 || items[0].Title != "survivor" {
-		t.Errorf("expected just the surviving story, got %+v", items)
+	if len(items) != 0 {
+		t.Errorf("expected no items, got %d", len(items))
 	}
 }
 
-func TestFetchFailsWhenListingUnavailable(t *testing.T) {
-	// Without the listing there is nothing to report, so this one does fail.
+func TestFetchFailsOnUpstreamError(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/topstories.json", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/search", func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "down", http.StatusServiceUnavailable)
 	})
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	if _, err := newSource(t, server, 50).Fetch(context.Background()); err == nil {
-		t.Fatal("expected an error when topstories is unavailable")
+	if _, err := newSource(t, server, 50).Fetch(context.Background(), "go"); err == nil {
+		t.Fatal("expected an error when the search endpoint is unavailable")
 	}
 }
 
 func TestFetchReportsCancellation(t *testing.T) {
-	server := stubAPI(t, `[1]`, map[int]string{1: story(1, "one", "https://example.test/1", 10)})
+	server, _ := stubAPI(t, hits(story(1, "one", "https://example.test/1", 10)))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := newSource(t, server, 50).Fetch(ctx); err == nil {
-		t.Fatal("expected a cancelled context to surface as an error, not a partial listing")
+	if _, err := newSource(t, server, 50).Fetch(ctx, "go"); err == nil {
+		t.Fatal("expected a cancelled context to surface as an error")
 	}
 }

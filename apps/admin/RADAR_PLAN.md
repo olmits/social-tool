@@ -60,15 +60,20 @@ plan's request (`services/api/RADAR_PLAN.md` Phase 1 task 4). Without them the p
 render the topic chip or the Engagement column except through a client-side join and a
 per-source `rawPayload` parser, which is why they were asked for rather than worked around.
 
-One caveat that outlives Phase 1: **the poller does not select topics yet.** It does not call
-`GET /topics/queries`, so it polls unscoped and every signal it stores has a null `topicId`.
-Topics can be created and signals *can* be filtered by one, but nothing populates the link
-until the worker-side change lands. Build the topic filter; expect it to return nothing until
-then.
+**The poller now selects topics** (API-plan Phase 1 task 6), so the topic filter returns real
+rows: a pass reads `GET /topics/queries`, fetches each source per topic, and stamps every
+signal with the topic it was fetched for. Two things follow for the panel:
+
+- **A `topicId` of null now means an old signal**, not an unfinished feature — one polled
+  before topics existed, or one whose topic was since deleted. Rendering no chip is right.
+- **The radar polls nothing until a topic exists.** A fresh environment with no topics stores
+  no signals at all, by design. If the Radar page looks empty, the Topics page is the fix, and
+  the empty state should say so rather than implying something is broken.
 
 `SignalSource` values are UPPERCASE (`HACKER_NEWS | DEVTO | GITHUB_TRENDING | REDDIT |
-PRODUCT_HUNT`), like every other backend enum — but only the first three are ever polled; see
-Phase 1 task 6.
+PRODUCT_HUNT`), like every other backend enum — but only the first three are ever polled. A
+topic may carry a query for any of the five; the poller skips the ones it does not run, so the
+Topics form should not offer Reddit or Product Hunt yet.
 
 ## Conventions to follow
 
@@ -121,12 +126,13 @@ backend will carry a single `nativeScore`. The panel formats it per source — `
 `456 reactions`, `1.2k ★` — and the second number is dropped. Recovering it would mean a
 per-source `rawPayload` parser in the panel, which is the thing `nativeScore` exists to avoid.
 
-**`match` is not per-topic yet.** `source.Normalize`
-(`services/workers/internal/source/source.go`) rescales against the highest score in a
-*source's* batch, so a quiet topic's leader sits far below whatever is trending globally.
-Per-`(source, topic)` rescaling is API-plan Phase 2. Until it ships, either sequence Phase 2
-first or label the column "Score" rather than "Match" — a percentage labelled "match" that
-does not measure topic match is worse than no label.
+**`match` is per-topic, and "Match" is now the honest label.** The radar fetches per
+`(source, topic)` pair and normalizes each batch on its own
+(`services/workers/internal/source/source.go`), so a topic's leader scores 100 within its own
+topic rather than against whatever is trending globally — API-plan Phase 2, delivered. What it
+still is *not* is a per-source comparison: a 100 from dev.to and a 100 from GitHub mean "top of
+this topic on that source", so ranking the two against each other reads more than the number
+carries.
 
 ---
 

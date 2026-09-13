@@ -32,12 +32,13 @@ Delivered in the first slice (`V7__signals.sql`, `signal/`):
 - `SignalSource` enum with all five sources from `PLAN.md:44`; three are polled.
 - The `drafts.signal_id` FK that `V5__drafts.sql` deferred.
 
-**Phase 1 below is now delivered too** (`V8__topics.sql`, `V9__signals_topic.sql`, `topic/`,
-`signal/RadarService`), closing the gap this plan was written to close: the radar now knows
-what you write about. What is still open is Phase 2, Phase 3, and the worker-side half of
-Phase 1 — the poller does not yet call `GET /topics/queries`, so it still polls unscoped and
-sends a null `topicId`. Every topic it could send is validated and stored; nothing selects one
-yet.
+**Phases 1 and 2 below are now delivered too** (`V8__topics.sql`, `V9__signals_topic.sql`,
+`topic/`, `signal/RadarService`, and the worker's `radar`/`source`/`coreapi` packages),
+closing the gap this plan was written to close: the radar now knows what you write about,
+end to end. A topic created in the panel changes what the next poll fetches, and every signal
+stored carries the topic it was fetched for.
+
+Only Phase 3 (optional) and the deferred platform loop are still open.
 
 ---
 
@@ -111,10 +112,11 @@ from a run before topics existed, has no topic behind it.
 
 The slice that turns "what is popular" into "what is popular in the things I write about".
 
-Kept here as the record of what was built and why. Two things landed differently from the
-sketch below, both noted in place: the `topic_queries` composite key is modelled as a JPA
-element collection rather than an entity, and `GET /signals` gained `topicName` and
-`nativeScore` on its response (task 4) at the panel plan's request.
+Kept here as the record of what was built and why. Three things landed differently from the
+sketch below, all noted in place: the `topic_queries` composite key is modelled as a JPA
+element collection rather than an entity, `GET /signals` gained `topicName` and `nativeScore`
+on its response (task 4) at the panel plan's request, and the Hacker News source had to be
+rewritten against a different upstream API entirely (task 6).
 
 1. **`V8__topics.sql`** — `topics (id, name, enabled, created_at, updated_at)` with `name`
    unique, plus `topic_queries (topic_id, source, query)` unique on `(topic_id, source)`.
@@ -153,19 +155,48 @@ element collection rather than an entity, and `GET /signals` gained `topicName` 
    `source.Signal`, `coreapi.Signal`, and `radar.toWire`.
 5. **`GET /topics/queries`** — a worker-facing projection returning enabled topics with their
    per-source queries, so the poller fetches its whole work list in one call.
+6. **The poller selects topics** (`radar/`, `source/`, `coreapi/topics.go`). The half that
+   makes the other five visible to a user. A pass now starts by reading the work list, plans
+   one fetch per `(source, topic)` pair that has a query, and stamps every signal with the
+   topic it was fetched for.
+
+   `source.Source.Fetch` takes the topic's query, in whatever dialect that source searches in.
+   Three consequences worth knowing:
+
+   - **Hacker News moved from the Firebase API to Algolia.** `/v0/topstories.json` is a fixed
+     ranked list with no way to ask it for a subject, so a topic-scoped poll is not possible
+     there at all. Algolia indexes the same corpus, takes a query, and returns whole stories
+     in the search response — which also deleted the per-item fan-out and its worker pool.
+     `objectID` is the same item number Firebase returned, so external ids did not churn.
+   - **A pass with no enabled topics polls nothing** and logs a warning, rather than falling
+     back to a global listing. The fallback is the behaviour topics replaced; keeping it would
+     quietly refill the radar with the noise this plan set out to remove.
+   - **Request volume is now one call per `(source, topic)` pair.** Sources run concurrently
+     and a source's own topics run in sequence, so the burst against any one host stays at one
+     request — but GitHub's unauthenticated 10/minute ceiling is now reached at ten topics
+     rather than never. `GITHUB_TOKEN` lifts it to 30.
+
+   A topic naming a source this worker does not run — one excluded from `RADAR_SOURCES`, or
+   Reddit and Product Hunt, which the API knows and the poller does not — is skipped, not an
+   error. Failure isolation is per pair: one topic's query being rejected costs that topic on
+   that source and nothing else.
 
 **Acceptance.** A topic created in the panel changes what the next radar run fetches, and
 `GET /signals?topicId=` returns only that topic's signals, ranked.
 
-## Phase 2 — Per-topic scoring
+## Phase 2 — Per-topic scoring — **delivered with Phase 1**
 
-6. **Normalize within `(source, topic)`, not within source.** Currently the rescale runs
-   against the highest score in a source's batch, so a quiet topic's best item is buried under
-   whatever is trending globally. Per-topic rescaling makes a topic's leader score 100 within
+7. **Normalize within `(source, topic)`, not within source.** The rescale used to run against
+   the highest score in a source's batch, so a quiet topic's best item was buried under
+   whatever was trending globally. Per-topic rescaling makes a topic's leader score 100 within
    its own topic, which is what the panel's `match` field has always meant.
 
-This is a worker-side change (`source.Normalize`) with no API change, listed here because it
-only makes sense once Phase 1 exists.
+This landed as a consequence of Phase 1 task 6 rather than as the change to `source.Normalize`
+sketched here. Once a pass fetches per `(source, topic)` pair, each batch handed to `Normalize`
+*is* one topic's worth of items, and the existing per-batch rescale is already per-topic.
+Nothing inside `Normalize` changed; what changed is what a batch means. Worth knowing if the
+fan-out is ever reshaped — the property is a product of how the radar groups its fetches, and
+would be lost by merging batches back together before normalizing.
 
 ## Phase 3 — RSS as the generic source (optional)
 
@@ -241,8 +272,9 @@ silently doing nothing.
 
 ## Suggested order
 
-Phase 1 (tasks 1→5, sequential — 2 depends on 1, 4 on both) → Phase 2 → panel work
+Phase 1 (tasks 1→6, sequential — 2 depends on 1, 4 on both, 6 on 5) → Phase 2 → panel work
 (`apps/admin/RADAR_PLAN.md`) → Phase 3 only if the long tail turns out to matter.
 
-Phase 1 is the whole value of this iteration: without topics the radar stores noise, and
-every panel screen is waiting on it.
+Phase 1 was the whole value of this iteration: without topics the radar stores noise, and
+every panel screen was waiting on it. Phases 1 and 2 are done; **the panel work is what is
+next**, and nothing in it is blocked.

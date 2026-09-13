@@ -1,11 +1,13 @@
-// Package hackernews polls Hacker News through its public Firebase API.
+// Package hackernews polls Hacker News through the Algolia search API.
 //
-// The API has no batch endpoint: /v0/topstories.json returns ranked item ids and each item
-// must then be fetched individually. Those per-item fetches run concurrently with a bounded
-// worker pool — sequential fetching of the whole front page would dominate a radar run, and
-// unbounded fan-out would open hundreds of sockets at once.
+// Not the Firebase API, which is what the front page is served from: /v0/topstories.json is
+// a fixed ranked list with no way to ask it for a subject, so scoping a poll to a topic is
+// impossible there. Algolia indexes the same corpus and takes a query, which is the whole
+// reason for the swap — and it returns full stories in the search response, so the per-item
+// fan-out the Firebase API forced is gone with it.
 //
-// No credentials are required.
+// A topic's query here is plain search terms ("rust async"), matched against titles, URLs,
+// and story text. Neither credentials nor a key are required.
 package hackernews
 
 import (
@@ -13,8 +15,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
-	"sync"
+	"time"
 
 	"github.com/olmits/social-tool/services/workers/internal/source"
 )
@@ -23,133 +26,117 @@ const (
 	// Name matches the SignalSource enum in the core API.
 	Name = "HACKER_NEWS"
 
-	defaultBaseURL = "https://hacker-news.firebaseio.com/v0"
+	defaultBaseURL = "https://hn.algolia.com/api/v1"
 
-	// defaultLimit is how far down the ranked list to read. The front page is 30; taking a
-	// little more gives the drafting slice items that are climbing but not yet at the top.
+	// defaultLimit is how many hits to take per query. Fifty is roughly the front page plus
+	// the items climbing towards it, which is the part worth drafting from.
 	defaultLimit = 50
 
-	// fetchConcurrency bounds simultaneous item fetches.
-	fetchConcurrency = 8
+	// defaultWindowDays scopes results to stories submitted in the last N days. Unscoped,
+	// a search returns the best-matching stories of all time — a 2013 classic outranks
+	// this week's discussion, which is the opposite of what a trend radar is for.
+	defaultWindowDays = 7
+
+	// storyTag restricts hits to submissions. The index also holds comments, polls, and
+	// user records, none of which are drafting material.
+	storyTag = "story"
 
 	// itemURLPrefix is where a story with no external link lives (Ask HN, Show HN text posts).
 	itemURLPrefix = "https://news.ycombinator.com/item?id="
 )
 
-// Source polls the Hacker News front page.
+// Source searches Hacker News for recent stories matching a topic.
 type Source struct {
 	baseURL    string
 	limit      int
+	windowDays int
 	httpClient *http.Client
+	now        func() time.Time
 }
 
-// New returns a Source reading the top `limit` stories. A limit of zero or less uses the
-// default; an empty baseURL uses the public API.
-func New(httpClient *http.Client, baseURL string, limit int) *Source {
+// New returns a Source reading the top `limit` stories submitted within the last
+// `windowDays` days. Non-positive values fall back to defaults; an empty baseURL uses the
+// public API.
+func New(httpClient *http.Client, baseURL string, limit, windowDays int) *Source {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
 	if limit <= 0 {
 		limit = defaultLimit
 	}
-	return &Source{baseURL: baseURL, limit: limit, httpClient: httpClient}
+	if windowDays <= 0 {
+		windowDays = defaultWindowDays
+	}
+	return &Source{
+		baseURL:    baseURL,
+		limit:      limit,
+		windowDays: windowDays,
+		httpClient: httpClient,
+		now:        time.Now,
+	}
 }
 
 func (s *Source) Name() string { return Name }
 
-// Fetch reads the ranked story ids, then the stories themselves.
+// Fetch runs one search for the topic's terms.
 //
-// An individual story that fails to fetch is skipped rather than failing the run: the front
-// page is a listing, and losing one of fifty entries is not worth discarding the other
-// forty-nine. A failure to read the listing itself does fail, since there is nothing to
-// report without it.
-func (s *Source) Fetch(ctx context.Context) ([]source.Item, error) {
-	var ids []int
-	if err := source.GetJSON(ctx, s.httpClient, s.baseURL+"/topstories.json", &ids); err != nil {
-		return nil, fmt.Errorf("hacker news topstories: %w", err)
-	}
-	if len(ids) > s.limit {
-		ids = ids[:s.limit]
-	}
+// The /search endpoint ranks by Algolia's own relevance rather than by points, which is what
+// is wanted here: the radar rescales by points itself, and asking for the most relevant
+// stories in a window beats asking for the highest-scoring ones of any relevance.
+func (s *Source) Fetch(ctx context.Context, query string) ([]source.Item, error) {
+	since := s.now().UTC().AddDate(0, 0, -s.windowDays).Unix()
 
-	items := make([]source.Item, len(ids))
-	found := make([]bool, len(ids))
+	params := url.Values{}
+	params.Set("query", query)
+	params.Set("tags", storyTag)
+	params.Set("numericFilters", "created_at_i>"+strconv.FormatInt(since, 10))
+	params.Set("hitsPerPage", strconv.Itoa(s.limit))
+	endpoint := s.baseURL + "/search?" + params.Encode()
 
-	var wg sync.WaitGroup
-	slots := make(chan struct{}, fetchConcurrency)
-	for i, id := range ids {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-
-			item, ok, err := s.fetchItem(ctx, id)
-			if err != nil || !ok {
-				return
-			}
-			items[i] = item
-			found[i] = true
-		}()
-	}
-	wg.Wait()
-
-	// A cancelled context fails every in-flight fetch, so whatever landed is an arbitrary
-	// fraction of the page. Report the cancellation instead of a partial listing.
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	var result searchResult
+	if err := source.GetJSON(ctx, s.httpClient, endpoint, &result); err != nil {
+		return nil, fmt.Errorf("hacker news search for %q: %w", query, err)
 	}
 
-	// Rebuild in rank order, dropping the gaps left by skipped stories.
-	ranked := make([]source.Item, 0, len(items))
-	for i, ok := range found {
-		if ok {
-			ranked = append(ranked, items[i])
+	items := make([]source.Item, 0, len(result.Hits))
+	for _, payload := range result.Hits {
+		var story hit
+		if err := json.Unmarshal(payload, &story); err != nil {
+			// One malformed hit should not cost the rest of the page.
+			continue
 		}
+		if story.ObjectID == "" || story.Title == "" {
+			continue
+		}
+
+		// Ask HN and Show HN text posts carry no url; the signal still needs somewhere to
+		// point, and the discussion is the content in that case anyway.
+		link := story.URL
+		if link == "" {
+			link = itemURLPrefix + story.ObjectID
+		}
+
+		items = append(items, source.Item{
+			ExternalID:  story.ObjectID,
+			Title:       story.Title,
+			URL:         link,
+			NativeScore: story.Points,
+			RawPayload:  payload,
+		})
 	}
-	return ranked, nil
+	return items, nil
 }
 
-// fetchItem retrieves one story. The bool reports whether the item is usable: the API
-// returns a JSON null for deleted items, and non-story types (comments, jobs, polls) are
-// not drafting material.
-func (s *Source) fetchItem(ctx context.Context, id int) (source.Item, bool, error) {
-	url := fmt.Sprintf("%s/item/%d.json", s.baseURL, id)
-
-	var raw json.RawMessage
-	if err := source.GetJSON(ctx, s.httpClient, url, &raw); err != nil {
-		return source.Item{}, false, err
-	}
-
-	var story item
-	if err := json.Unmarshal(raw, &story); err != nil {
-		return source.Item{}, false, fmt.Errorf("decode hacker news item %d: %w", id, err)
-	}
-	if story.ID == 0 || story.Type != "story" || story.Dead || story.Deleted || story.Title == "" {
-		return source.Item{}, false, nil
-	}
-
-	link := story.URL
-	if link == "" {
-		link = itemURLPrefix + strconv.Itoa(story.ID)
-	}
-
-	return source.Item{
-		ExternalID:  strconv.Itoa(story.ID),
-		Title:       story.Title,
-		URL:         link,
-		NativeScore: story.Score,
-		RawPayload:  raw,
-	}, true, nil
+type searchResult struct {
+	Hits []json.RawMessage `json:"hits"`
 }
 
-// item is the subset of the Firebase item shape the radar reads.
-type item struct {
-	ID      int    `json:"id"`
-	Type    string `json:"type"`
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	Score   int    `json:"score"`
-	Dead    bool   `json:"dead"`
-	Deleted bool   `json:"deleted"`
+// hit is the subset of the Algolia story shape the radar reads. ObjectID is the HN item
+// number as a string — the same identifier the Firebase API returns as an int, so the
+// external ids stored before this source moved to Algolia still match.
+type hit struct {
+	ObjectID string `json:"objectID"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	Points   int    `json:"points"`
 }

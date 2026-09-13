@@ -17,8 +17,9 @@ import (
 	"github.com/olmits/social-tool/services/workers/internal/worker"
 )
 
-// poll runs the trend radar: fetch every configured content source, normalize what they
-// return, and store it through the core API as drafting input.
+// poll runs the trend radar: read the enabled topics from the core API, fetch every
+// configured content source for each of them, normalize what they return, and store it
+// through the core API as drafting input.
 func poll(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string) error {
 	flags := flag.NewFlagSet(cmdPoll, flag.ContinueOnError)
 	once := flags.Bool("once", false, "run a single pass and exit, instead of looping")
@@ -67,7 +68,7 @@ func buildSources(cfg config.Config) ([]source.Source, error) {
 
 		switch name {
 		case config.SourceHackerNews:
-			sources = append(sources, hackernews.New(httpClient, "", cfg.Radar.Limit))
+			sources = append(sources, hackernews.New(httpClient, "", cfg.Radar.Limit, 0))
 		case config.SourceDevto:
 			sources = append(sources, devto.New(httpClient, "", cfg.Radar.Limit, 0))
 		case config.SourceGitHubTrending:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestFetchReadsArticles(t *testing.T) {
 		{"id":102,"title":"Postgres indexes","url":"https://dev.to/a/pg","public_reactions_count":90}
 	]`)
 
-	items, err := newSource(server, 50, 1).Fetch(context.Background())
+	items, err := newSource(server, 50, 1).Fetch(context.Background(), "go")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -59,15 +60,29 @@ func TestFetchReadsArticles(t *testing.T) {
 	}
 }
 
-func TestFetchSendsLimitAndWindow(t *testing.T) {
+func TestFetchSendsTagLimitAndWindow(t *testing.T) {
 	server, query := stubAPI(t, `[]`)
 
-	if _, err := newSource(server, 25, 3).Fetch(context.Background()); err != nil {
+	if _, err := newSource(server, 25, 3).Fetch(context.Background(), "kubernetes"); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
-	if *query != "per_page=25&top=3" {
-		t.Errorf("query = %q, want per_page and top to reflect the configuration", *query)
+	// The tag is the topic's query: without it the source is back to polling whatever is
+	// globally popular on dev.to, which is the thing topics exist to stop.
+	if *query != "per_page=25&tag=kubernetes&top=3" {
+		t.Errorf("query = %q, want the tag alongside per_page and top", *query)
+	}
+}
+
+func TestFetchEscapesTheTag(t *testing.T) {
+	// Tags are user input from the panel, so they reach the URL unvalidated.
+	server, query := stubAPI(t, `[]`)
+
+	if _, err := newSource(server, 50, 1).Fetch(context.Background(), "c++ &more"); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if !strings.Contains(*query, "tag=c%2B%2B+%26more") {
+		t.Errorf("query = %q, want the tag percent-encoded", *query)
 	}
 }
 
@@ -81,7 +96,7 @@ func TestFetchSkipsIncompleteArticles(t *testing.T) {
 		{"id":4,"title":"Good","url":"https://dev.to/a/4","public_reactions_count":10}
 	]`)
 
-	items, err := newSource(server, 50, 1).Fetch(context.Background())
+	items, err := newSource(server, 50, 1).Fetch(context.Background(), "go")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -98,7 +113,7 @@ func TestFetchSkipsMalformedEntries(t *testing.T) {
 		{"id":7,"title":"Good","url":"https://dev.to/a/7","public_reactions_count":3}
 	]`)
 
-	items, err := newSource(server, 50, 1).Fetch(context.Background())
+	items, err := newSource(server, 50, 1).Fetch(context.Background(), "go")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -115,7 +130,7 @@ func TestFetchFailsOnUpstreamError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	if _, err := newSource(server, 50, 1).Fetch(context.Background()); err == nil {
+	if _, err := newSource(server, 50, 1).Fetch(context.Background(), "go"); err == nil {
 		t.Fatal("expected an error for a non-2xx response")
 	}
 }

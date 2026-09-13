@@ -2,6 +2,10 @@
 //
 // One request returns the whole listing already ranked, so unlike Hacker News there is no
 // per-item fan-out. No credentials are required for public article reads.
+//
+// A topic's query here is a single dev.to tag — the platform's own taxonomy, which authors
+// apply themselves. That makes it a narrower and more accurate filter than a text search
+// would be, and it is why a topic's dev.to query is "go" rather than a phrase.
 package devto
 
 import (
@@ -54,18 +58,19 @@ func New(httpClient *http.Client, baseURL string, limit, topDays int) *Source {
 
 func (s *Source) Name() string { return Name }
 
-// Fetch reads one page of top articles.
-func (s *Source) Fetch(ctx context.Context) ([]source.Item, error) {
-	query := url.Values{}
-	query.Set("per_page", strconv.Itoa(s.limit))
-	query.Set("top", strconv.Itoa(s.topDays))
-	endpoint := s.baseURL + "/articles?" + query.Encode()
+// Fetch reads one page of the top articles carrying the given tag.
+func (s *Source) Fetch(ctx context.Context, query string) ([]source.Item, error) {
+	params := url.Values{}
+	params.Set("tag", query)
+	params.Set("per_page", strconv.Itoa(s.limit))
+	params.Set("top", strconv.Itoa(s.topDays))
+	endpoint := s.baseURL + "/articles?" + params.Encode()
 
 	// Decoded twice: once into the fields the radar reads, once as raw JSON so each
 	// article's original payload can be stored alongside the normalized item.
 	var raw []json.RawMessage
 	if err := source.GetJSON(ctx, s.httpClient, endpoint, &raw); err != nil {
-		return nil, fmt.Errorf("dev.to articles: %w", err)
+		return nil, fmt.Errorf("dev.to articles for tag %q: %w", query, err)
 	}
 
 	items := make([]source.Item, 0, len(raw))

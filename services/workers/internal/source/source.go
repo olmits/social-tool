@@ -6,6 +6,10 @@
 // those to Signals, rescaling the score so items from different sources can sit in one
 // ranked list. Keeping that split here means a Source never has to know how scoring works
 // across the rest of the system.
+//
+// A Source is told what to look for and nothing about why. Topics live in the core API and
+// are resolved by the radar, which passes each source only the query string for the topic it
+// is polling; nothing in this package knows a topic exists.
 package source
 
 import (
@@ -56,13 +60,23 @@ type Signal struct {
 type Source interface {
 	// Name identifies the source and must match a SignalSource value in the core API.
 	Name() string
-	// Fetch retrieves the current listing. Returning an empty slice with a nil error is
-	// valid and means the source had nothing to report.
-	Fetch(ctx context.Context) ([]Item, error)
+	// Fetch retrieves the current listing for query, in whatever dialect this source
+	// searches in — a dev.to tag, GitHub search qualifiers, Hacker News search terms.
+	// The query is never empty: the core API rejects a blank one, and the radar only
+	// plans a fetch for a (source, topic) pair that has one.
+	//
+	// Returning an empty slice with a nil error is valid and means the source had nothing
+	// to report for that query, which is an ordinary outcome for a narrow topic.
+	Fetch(ctx context.Context, query string) ([]Item, error)
 }
 
 // Normalize converts a source's items into signals, rescaling NativeScore onto 0-100
 // relative to the highest score in the batch.
+//
+// One batch is one (source, topic) fetch, so the rescale is per topic: a topic's leader
+// scores 100 within its own topic rather than against whatever is trending globally on that
+// source. That is what the panel's "match" column has always meant, and it is a property of
+// how the radar groups its fetches, not of anything this function does.
 //
 // The rescale is logarithmic, not linear, because popularity distributions here have long
 // tails: a front-page HN story can outscore the tenth item by an order of magnitude, and a

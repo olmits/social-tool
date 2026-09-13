@@ -5,9 +5,14 @@
 // search API for recently-created repositories ranked by stars, which approximates the same
 // thing from a documented, stable endpoint.
 //
-// Unauthenticated search is rate-limited to 10 requests per minute. One run makes a single
-// request, so no token is required; set one only if the radar's interval ever drops below
-// that. A token would also lift the limit to 30/minute.
+// A topic's query here is a set of GitHub search qualifiers ("language:go topic:cli"), sent
+// as-is alongside the recency window this source adds. Qualifiers rather than bare words
+// because GitHub's own search syntax is far more precise than a text match on a description.
+//
+// Unauthenticated search is rate-limited to 10 requests per minute, and a run now makes one
+// request per topic that has a GitHub query. Ten topics is therefore the point at which an
+// unauthenticated radar starts getting throttled; set GITHUB_TOKEN to lift the limit to
+// 30/minute. A throttled fetch costs that topic, not the run.
 package github
 
 import (
@@ -77,20 +82,24 @@ func New(httpClient *http.Client, baseURL string, limit, windowDays int, token s
 
 func (s *Source) Name() string { return Name }
 
-// Fetch runs one search query.
-func (s *Source) Fetch(ctx context.Context) ([]source.Item, error) {
+// Fetch runs one search, combining the topic's qualifiers with this source's recency window.
+//
+// The window is always appended, even if the query carries a created: qualifier of its own:
+// GitHub intersects two ranges rather than letting the later one win, so the narrower of the
+// two applies and a topic can only ever ask for something more recent, not less.
+func (s *Source) Fetch(ctx context.Context, query string) ([]source.Item, error) {
 	since := s.now().UTC().AddDate(0, 0, -s.windowDays).Format(time.DateOnly)
 
-	query := url.Values{}
-	query.Set("q", "created:>"+since)
-	query.Set("sort", "stars")
-	query.Set("order", "desc")
-	query.Set("per_page", strconv.Itoa(s.limit))
-	endpoint := s.baseURL + "/search/repositories?" + query.Encode()
+	params := url.Values{}
+	params.Set("q", query+" created:>"+since)
+	params.Set("sort", "stars")
+	params.Set("order", "desc")
+	params.Set("per_page", strconv.Itoa(s.limit))
+	endpoint := s.baseURL + "/search/repositories?" + params.Encode()
 
 	var result searchResult
 	if err := s.get(ctx, endpoint, &result); err != nil {
-		return nil, fmt.Errorf("github trending search: %w", err)
+		return nil, fmt.Errorf("github search for %q: %w", query, err)
 	}
 
 	items := make([]source.Item, 0, len(result.Items))
