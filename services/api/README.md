@@ -124,7 +124,7 @@ src/main/java/com/omits/social_api/
 ├── account/      # Account entity, repo, service, OAuth flows
 ├── adapter/      # PlatformAdapter interface + bluesky/, mastodon/, reddit/
 ├── draft/        # Draft entity, state machine, DraftService
-├── drafting/     # Claude API client, prompt building, DraftingService
+├── generation/   # Claude API client, prompt building, GenerationService
 ├── affiliate/    # AffiliateLinkService, disclosure enforcement
 └── config/       # SecurityConfig, WebClientConfig, AwsConfig
 

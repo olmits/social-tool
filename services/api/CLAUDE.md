@@ -30,13 +30,18 @@ src/main/java/com/omits/socialapi/
 ├── account/      # Account entity, repo, service, OAuth flows
 ├── adapter/      # PlatformAdapter interface + bluesky/, mastodon/, reddit/
 ├── draft/        # Draft entity, state machine, DraftService
-├── drafting/     # Claude API client, prompt building, DraftingService
+├── generation/   # Claude API client, prompt building, GenerationService
 ├── affiliate/    # AffiliateLinkService, disclosure enforcement
 └── config/       # SecurityConfig, WebClientConfig, AwsConfig
 ```
 
 Organized by domain slice, not by layer. A new platform adapter goes in
 `adapter/<platform>/` — no changes to core logic required.
+
+Two of these are **capabilities, not aggregates**: `generation/` and `adapter/` own no entity
+and no table. Each sits beside the aggregate it serves (`draft/`, `account/`) rather than
+inside it, so the aggregate never imports an external SDK and the capability can be deleted as
+a directory. The dependency runs one way only — `generation/ → draft/`, never back.
 
 ## Key conventions
 

@@ -42,6 +42,18 @@ social-api:
     api-key: ${API_KEY}
   aws:
     region: ${AWS_REGION:us-east-1}
+  claude:
+    # Blank default, unlike social-api.security.api-key above: a required property with no
+    # default fails context refresh for every @SpringBootTest that does not register it, and
+    # drafting is the only thing in the service that needs this key. With none configured the
+    # generate endpoint answers 502 and nothing else is affected.
+    api-key: ${CLAUDE_API_KEY:}
+    model: ${CLAUDE_MODEL:claude-opus-5}
+    # Let the model read the article behind a signal's URL instead of drafting from the
+    # headline. Costs the article's tokens and several seconds; turn off if that stops paying.
+    fetch-article: ${CLAUDE_FETCH_ARTICLE:true}
+    # The SDK's own default scales to ten minutes, which would hang the panel's dialog.
+    timeout-seconds: ${CLAUDE_TIMEOUT_SECONDS:90}
   bluesky:
     # PDS host for AT Protocol / XRPC calls. Defaults to the main Bluesky PDS; override for a
     # self-hosted PDS or a test double.

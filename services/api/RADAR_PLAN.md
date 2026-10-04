@@ -265,8 +265,10 @@ silently doing nothing.
 
 ## Explicitly out of scope
 
-- **AI drafting** (`drafting/` is still an empty package). The radar produces signals; turning
-  a signal into draft text is its own slice. `POST /drafts` still takes only manual content.
+- ~~**AI drafting**~~ — **delivered.** `generation/` is a real slice now: `POST /drafts/generate`
+  takes a signal, a voice profile and an account and returns a persisted `DRAFT`. See
+  `generation/README.md` for its shape and the deferrals it leaves behind. `CreateDraftCommand`
+  also gained `signalId`, so a hand-written draft can record where it came from.
 - **Analytics** (`metrics`, `posts` tables). Phase 3 of the root plan, blocked on
   `DEFERRED.md` §1.
 

@@ -11,6 +11,9 @@ import com.omits.social_api.draft.dto.FailDraftCommand;
 import com.omits.social_api.draft.dto.PublishDraftCommand;
 import com.omits.social_api.draft.dto.ScheduleDraftCommand;
 import com.omits.social_api.draft.model.DraftStatus;
+import com.omits.social_api.signal.dto.IngestSignalsCommand;
+import com.omits.social_api.signal.dto.SignalResponse;
+import com.omits.social_api.signal.model.SignalSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -24,6 +27,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -31,6 +35,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -87,9 +92,28 @@ class DraftControllerIntegrationTest {
         return account.id();
     }
 
+    /** Stores one signal through the poller's own route and returns its id. */
+    private UUID ingestOneSignal() {
+        String externalId = "sig-" + ThreadLocalRandom.current().nextLong(Long.MAX_VALUE);
+        var payload = new ObjectMapper().createObjectNode().put("id", externalId);
+        client().post().uri("/signals")
+                .body(new IngestSignalsCommand(List.of(new IngestSignalsCommand.Item(
+                        SignalSource.HACKER_NEWS, externalId, "Shipping Go services", null,
+                        "https://example.test/" + externalId, 90, 312, payload, Instant.now()))))
+                .retrieve().toBodilessEntity();
+
+        List<SignalResponse> signals = client().get().uri("/signals?source=HACKER_NEWS")
+                .retrieve().body(new ParameterizedTypeReference<>() {
+                });
+        assertThat(signals).isNotNull();
+        return signals.stream()
+                .filter(signal -> signal.externalId().equals(externalId))
+                .findFirst().orElseThrow().id();
+    }
+
     private DraftResponse createDraft(UUID accountId, String content) {
         return client().post().uri("/drafts")
-                .body(new CreateDraftCommand(accountId, Platform.BLUESKY, content))
+                .body(new CreateDraftCommand(accountId, null, Platform.BLUESKY, content))
                 .retrieve().body(DraftResponse.class);
     }
 
@@ -295,10 +319,40 @@ class DraftControllerIntegrationTest {
 
     // --- create validation ------------------------------------------------------
 
+    /**
+     * Provenance: a draft written about a radar signal records which one. The column and
+     * {@code DraftResponse.signalId} already existed; until now nothing could populate them.
+     */
+    @Test
+    void createRecordsTheSignalTheDraftCameFrom() {
+        UUID accountId = createAccount("provenance-user.bsky.social");
+        UUID signalId = ingestOneSignal();
+
+        DraftResponse draft = client().post().uri("/drafts")
+                .body(new CreateDraftCommand(accountId, signalId, Platform.BLUESKY, "from a signal"))
+                .retrieve().body(DraftResponse.class);
+
+        assertThat(draft).isNotNull();
+        assertThat(draft.signalId()).isEqualTo(signalId);
+        assertThat(draft.aiGenerated()).isFalse();
+    }
+
+    /** Without the service-level check this is a FK violation with no handler — a 500. */
+    @Test
+    void createWithAnUnknownSignalReturns404() {
+        UUID accountId = createAccount("bad-signal-user.bsky.social");
+
+        assertThatThrownBy(() -> client().post().uri("/drafts")
+                .body(new CreateDraftCommand(accountId, UUID.randomUUID(), Platform.BLUESKY, "ghost"))
+                .retrieve().toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.class)
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
     @Test
     void createForUnknownAccountReturns404() {
         assertThatThrownBy(() -> client().post().uri("/drafts")
-                .body(new CreateDraftCommand(UUID.randomUUID(), Platform.BLUESKY, "orphan"))
+                .body(new CreateDraftCommand(UUID.randomUUID(), null, Platform.BLUESKY, "orphan"))
                 .retrieve().toBodilessEntity())
                 .isInstanceOf(HttpClientErrorException.class)
                 .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.NOT_FOUND));
@@ -310,7 +364,7 @@ class DraftControllerIntegrationTest {
         client().delete().uri("/accounts/" + accountId).retrieve().toBodilessEntity();
 
         assertThatThrownBy(() -> client().post().uri("/drafts")
-                .body(new CreateDraftCommand(accountId, Platform.BLUESKY, "too late"))
+                .body(new CreateDraftCommand(accountId, null, Platform.BLUESKY, "too late"))
                 .retrieve().toBodilessEntity())
                 .isInstanceOf(HttpClientErrorException.class)
                 .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));
@@ -321,7 +375,7 @@ class DraftControllerIntegrationTest {
         UUID accountId = createAccount("mismatch-user.bsky.social");
 
         assertThatThrownBy(() -> client().post().uri("/drafts")
-                .body(new CreateDraftCommand(accountId, Platform.MASTODON, "wrong platform"))
+                .body(new CreateDraftCommand(accountId, null, Platform.MASTODON, "wrong platform"))
                 .retrieve().toBodilessEntity())
                 .isInstanceOf(HttpClientErrorException.class)
                 .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.CONFLICT));

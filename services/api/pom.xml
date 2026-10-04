@@ -105,6 +105,23 @@
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>sqs</artifactId>
 		</dependency>
+		<!--
+			The official Anthropic SDK, used by the drafting slice. A deliberate departure from
+			how adapter/bluesky/ talks to Bluesky by hand: Bluesky has no official Java SDK, so
+			hand-rolling there was forced. This one brings typed errors, configurable timeouts
+			and retries, and structured outputs (a JSON schema derived from a record), all of
+			which this service would otherwise have to write itself.
+
+			Not managed by the Boot BOM, so the version is pinned here. It pulls Jackson 2 and
+			OkHttp 4.12.0 transitively; both coexist with what is already here — Boot 4.1
+			manages a Jackson 2 BOM alongside Jackson 3, and 4.12.0 is the version mockwebserver
+			below is pinned to.
+		-->
+		<dependency>
+			<groupId>com.anthropic</groupId>
+			<artifactId>anthropic-java</artifactId>
+			<version>2.68.0</version>
+		</dependency>
 
 		<!-- Observability -->
 		<dependency>

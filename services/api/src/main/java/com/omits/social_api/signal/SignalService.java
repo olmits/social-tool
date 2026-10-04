@@ -2,6 +2,7 @@ package com.omits.social_api.signal;
 
 import com.omits.social_api.signal.dto.IngestSignalsCommand;
 import com.omits.social_api.signal.dto.IngestSignalsResponse;
+import com.omits.social_api.signal.exception.SignalNotFoundException;
 import com.omits.social_api.signal.model.SignalSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,7 +16,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Owns the {@code signals} store: the drafting slice's input pool.
+ * Owns the {@code signals} store: the generation slice's input pool.
  *
  * <p>Ingest is idempotent. The radar re-polls the same listings on a schedule, so the great
  * majority of every batch is items already stored; a repeat sighting refreshes the item's
@@ -30,6 +31,20 @@ public class SignalService {
     static final int MAX_BATCH_SIZE = 2_000;
 
     private final SignalRepository signalRepository;
+
+    /**
+     * One signal by id.
+     *
+     * <p>Added for the generation slice, which needs a signal's title, url and source to build a
+     * prompt. Deliberately not exposed as {@code GET /signals/{id}} — there is no reader for
+     * that route yet, and {@code SignalResponse} would need its topic name joined on the way
+     * out, which is {@code RadarService}'s job rather than this one's.
+     */
+    @Transactional(readOnly = true)
+    public Signal get(UUID signalId) {
+        return signalRepository.findById(signalId)
+                .orElseThrow(() -> new SignalNotFoundException(signalId));
+    }
 
     /**
      * Stores one radar run's harvest, creating first sightings and refreshing repeats.

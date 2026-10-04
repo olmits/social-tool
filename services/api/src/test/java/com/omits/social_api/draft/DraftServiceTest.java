@@ -31,33 +31,47 @@ class DraftServiceTest {
         stubSaveEchoesArgument();
         UUID accountId = UUID.randomUUID();
 
-        Draft draft = draftService.create(accountId, Platform.BLUESKY, "hello world");
+        Draft draft = draftService.create(accountId, null, Platform.BLUESKY, "hello world", false);
 
         assertThat(draft.getStatus()).isEqualTo(DraftStatus.DRAFT);
         assertThat(draft.getAccountId()).isEqualTo(accountId);
         assertThat(draft.getPlatform()).isEqualTo(Platform.BLUESKY);
         assertThat(draft.getContent()).isEqualTo("hello world");
+        assertThat(draft.getSignalId()).isNull();
         assertThat(draft.isAiGenerated()).isFalse();
         assertThat(draft.isDisclosureIncluded()).isFalse();
     }
 
     @Test
+    void createsAnAiGeneratedDraftLinkedToItsSignal() {
+        stubSaveEchoesArgument();
+        UUID accountId = UUID.randomUUID();
+        UUID signalId = UUID.randomUUID();
+
+        Draft draft = draftService.create(accountId, signalId, Platform.BLUESKY, "written", true);
+
+        assertThat(draft.getStatus()).isEqualTo(DraftStatus.DRAFT);
+        assertThat(draft.getSignalId()).isEqualTo(signalId);
+        assertThat(draft.isAiGenerated()).isTrue();
+    }
+
+    @Test
     void createRejectsNullAccountId() {
-        assertThatThrownBy(() -> draftService.create(null, Platform.BLUESKY, "hello"))
+        assertThatThrownBy(() -> draftService.create(null, null, Platform.BLUESKY, "hello", false))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(draftRepository, never()).save(any());
     }
 
     @Test
     void createRejectsNullPlatform() {
-        assertThatThrownBy(() -> draftService.create(UUID.randomUUID(), null, "hello"))
+        assertThatThrownBy(() -> draftService.create(UUID.randomUUID(), null, null, "hello", false))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(draftRepository, never()).save(any());
     }
 
     @Test
     void createRejectsBlankContent() {
-        assertThatThrownBy(() -> draftService.create(UUID.randomUUID(), Platform.BLUESKY, " "))
+        assertThatThrownBy(() -> draftService.create(UUID.randomUUID(), null, Platform.BLUESKY, " ", false))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(draftRepository, never()).save(any());
     }

@@ -1,6 +1,6 @@
 # Deferred work — social-api
 
-Interim decisions made while building the drafting/state-machine slice. Each was a
+Interim decisions made while building the draft state machine and generation slices. Each was a
 deliberate shortcut with a known follow-up, recorded here so a future session can pick
 it up without re-deriving the context. See root `PLAN.md` for architecture intent.
 
@@ -64,6 +64,29 @@ re-scheduled; the transition cannot silently cancel a publish that is already in
 
 ---
 
+## 3. Draft generation leaves four small things behind
+
+**Current state.** The `generation/` slice ships (`POST /drafts/generate`, `generation/README.md`).
+Four deliberate omissions, none blocking:
+
+- **`GET /signals/{id}` does not exist.** `SignalService.get` does, but it is a service method
+  with no route. The panel therefore renders draft provenance as the bare string "from a trend
+  signal" (`DraftDetail.tsx:136`) instead of the signal's title and link. Adding the route is
+  small; the panel side wants its own component, since `DraftDetail` is already at the size
+  limit `apps/admin/CLAUDE.md` sets.
+- **The Regenerate button on the Review page is still inert** — a `<button>` with no
+  `onClick` (`DraftDetail.tsx:102–121`). It can now call the same action the radar does, given
+  a draft that carries a `signalId`.
+- **`pause_turn` is not resumed.** With one permitted web fetch it is close to unreachable, and
+  resuming means replaying the assistant turn, which cannot be tested without a recorded
+  fixture. It currently fails loudly rather than returning a half-written post.
+- **Nothing records which voice wrote a draft**, and the model's one-sentence `rationale` is
+  logged at DEBUG and dropped. Both are a column on `drafts` if they turn out to matter.
+
+**Acceptance.** Each is independently shippable; none is a precondition for the others.
+
+---
+
 ## Resolved
 
 - **Account validation on draft create** — `DraftCreationService` now checks the account
@@ -72,4 +95,10 @@ re-scheduled; the transition cannot silently cancel a publish that is already in
   `disclosureIncluded` in `DRAFT` or `APPROVED` (editing an approved draft reverts it to
   `DRAFT`). The disclosure gate is now reachable over HTTP and covered by
   `DraftControllerIntegrationTest.approveWithAffiliateLinkAndNoDisclosureReturns422`.
-
+- **`signalId` on draft creation** — `CreateDraftCommand` carries it, `DraftCreationService`
+  validates it exists (a 404 rather than the 500 an FK violation produced), and
+  `DraftService.create` no longer hard-codes null. The `drafts.signal_id` column has been
+  there since `V7__signals.sql`; nothing could populate it until now.
+- **AI drafting** — the `generation/` slice, `V10__voice_profiles.sql`, and the `voice/` slice.
+  `PLAN.md` named a voice profile as one of drafting's three inputs; it is now a real entity
+  rather than the only one of the three that did not exist.

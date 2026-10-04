@@ -31,14 +31,26 @@ public class DraftService {
     private final DraftRepository draftRepository;
 
     /**
-     * Creates a new draft in {@link DraftStatus#DRAFT}. This is the manual-authoring path
-     * ({@code aiGenerated = false}); AI-generated drafts are created by the drafting slice.
+     * Creates a new draft in {@link DraftStatus#DRAFT}, for both authoring paths: typed by
+     * hand ({@code aiGenerated = false}) or written by the generation slice
+     * ({@code aiGenerated = true}).
      *
      * <p>Only the arguments themselves are validated here. That the account exists, is still
-     * connected, and publishes to {@code platform} is checked by {@link DraftCreationService},
-     * which keeps this slice free of a dependency on the account slice.
+     * connected, and publishes to {@code platform} — and that {@code signalId}, when given,
+     * names a real signal — is checked by {@link DraftCreationService}, which keeps this slice
+     * free of a dependency on the account and signal slices.
+     *
+     * <p>No short overload defaulting {@code (null, false)}: with two adjacent swappable
+     * {@link UUID}s and a trailing boolean, a convenience form is a trap the next caller falls
+     * into silently. The parameter order matches {@link Draft}'s constructor exactly so the
+     * two argument lists read identically side by side. If this list grows again, replace it
+     * with a {@code NewDraft} record rather than overloading.
+     *
+     * @param signalId the radar signal this draft came from, or null when authored from a
+     *                 free-form topic
      */
-    public Draft create(UUID accountId, Platform platform, String content) {
+    public Draft create(UUID accountId, UUID signalId, Platform platform, String content,
+                        boolean aiGenerated) {
         if (accountId == null) {
             throw new IllegalArgumentException("accountId must not be null");
         }
@@ -48,7 +60,7 @@ public class DraftService {
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("content must not be blank");
         }
-        return draftRepository.save(new Draft(accountId, null, platform, content, false));
+        return draftRepository.save(new Draft(accountId, signalId, platform, content, aiGenerated));
     }
 
     /**
