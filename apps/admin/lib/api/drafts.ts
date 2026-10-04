@@ -4,6 +4,7 @@ import type {
   DraftResponse,
   DraftStatus,
   EditDraftCommand,
+  GenerateDraftCommand,
   ScheduleDraftCommand,
 } from "./types";
 
@@ -93,6 +94,27 @@ export function scheduleDraft(
 ): Promise<DraftResponse> {
   return apiFetch<DraftResponse>(`/drafts/${id}/schedule`, {
     method: "PATCH",
+    body: command,
+  });
+}
+
+/**
+ * `POST /drafts/generate` — has Claude write a draft about a signal, returning
+ * the persisted `DRAFT`.
+ *
+ * **Slow.** The model reads the linked article before writing, so this takes
+ * tens of seconds where every other call here takes milliseconds. Callers need
+ * a pending state, and the server gives up at 90s.
+ *
+ * 404 for an unknown signal, voice profile, or account; 409 for a disconnected
+ * account, a platform mismatch, a disabled voice profile, or no voice profile
+ * at all; 422 if the model declined; 502 if generation failed upstream.
+ */
+export function generateDraft(
+  command: GenerateDraftCommand,
+): Promise<DraftResponse> {
+  return apiFetch<DraftResponse>("/drafts/generate", {
+    method: "POST",
     body: command,
   });
 }

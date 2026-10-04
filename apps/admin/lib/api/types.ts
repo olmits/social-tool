@@ -71,8 +71,66 @@ export interface DraftResponse {
 
 export interface CreateDraftCommand {
   accountId: string;
+  /**
+   * The radar signal this draft was written about, or null when it came from a
+   * free-form topic. When set it must name a real signal — the API answers 404
+   * otherwise.
+   */
+  signalId: string | null;
   platform: Platform;
   content: string;
+}
+
+/**
+ * A request to have Claude write a draft about a signal. Carries no content, by
+ * definition, and no `aiGenerated` flag — reaching this endpoint is what makes a
+ * draft AI-written.
+ *
+ * Slow by the standards of every other call here: the model reads the linked
+ * article before writing, so budget tens of seconds and show a pending state.
+ */
+export interface GenerateDraftCommand {
+  accountId: string;
+  signalId: string;
+  platform: Platform;
+  /**
+   * The voice to write in, or null to use the default profile. Null with no
+   * default configured is a 409, not a silent neutral fallback.
+   */
+  voiceProfileId: string | null;
+}
+
+/** How the author sounds. Platform-agnostic: length is the platform's business. */
+export interface VoiceProfileResponse {
+  id: string;
+  name: string;
+  /** Free text, reaching the drafting system prompt verbatim. */
+  instructions: string;
+  enabled: boolean;
+  /** Pre-selected in the generate dialog. At most one profile carries it. */
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `enabled` and `isDefault` default to true / false when null. */
+export interface CreateVoiceProfileCommand {
+  name: string;
+  instructions: string;
+  enabled: boolean | null;
+  isDefault: boolean | null;
+}
+
+/**
+ * A **sparse** patch, like {@link UpdateTopicCommand} and unlike
+ * {@link EditDraftCommand}: a null field is left unchanged. Setting `isDefault`
+ * to true moves the default off whichever profile currently holds it.
+ */
+export interface UpdateVoiceProfileCommand {
+  name?: string | null;
+  instructions?: string | null;
+  enabled?: boolean | null;
+  isDefault?: boolean | null;
 }
 
 /**

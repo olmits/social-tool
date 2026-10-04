@@ -61,8 +61,9 @@ export interface RadarStat {
  * run to compare against, and inventing a "+6" on a live page is worse than
  * showing the number alone.
  *
- * "Drafted today" is deliberately absent — it needs drafts that carry a
- * `signalId`, and `CreateDraftCommand` has no such field yet (RADAR_PLAN task 15).
+ * "Drafted today" is still absent, but no longer blocked: drafts now carry a
+ * `signalId`, so the count is derivable. It needs a drafts fetch this page does
+ * not currently make, which is the only reason it is not here.
  */
 export function radarStats(
   signals: SignalResponse[],

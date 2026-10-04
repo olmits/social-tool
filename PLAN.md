@@ -85,7 +85,9 @@ Reddit is limited to a single account. Reddit's Responsible Builder Policy (upda
 |---|---|
 | `accounts` | platform, handle, credential_ref, status |
 | `mastodon_account_details` | account_id, instance |
-| `signals` | source, external_id, topic, url, score, raw_payload, fetched_at |
+| `signals` | source, external_id, title, topic_id, url, score, native_score, raw_payload, fetched_at |
+| `topics` | name, enabled, + `topic_queries` (topic_id, source, query) |
+| `voice_profiles` | name, instructions, enabled, is_default — how drafts sound; platform-agnostic |
 | `drafts` | account_id, signal_id, platform, content, affiliate_links, status, ai_generated, disclosure_included |
 | `posts` | draft_id, account_id, platform, remote_id, published_at |
 | `metrics` | post_id, impressions, clicks, engagement, fetched_at |
@@ -102,6 +104,8 @@ User login for the admin panel (NextAuth or similar) lives entirely in Next.js �
 **Phase 0 — Foundations.** Repository, database schema, secrets storage, and a single Bluesky adapter. Goal: create a draft and publish it through the code on one platform. Submit the Reddit app for approval at the start of this phase so the review clock runs in parallel.
 
 **Phase 1 — Core loop, two platforms.** Add the Mastodon adapter, the scheduling queue, the review/approve panel, and Claude drafting. End state: write a draft with Claude, edit it, approve it, and have it post to Bluesky or Mastodon on schedule, on a chosen account.
+
+*Claude drafting is done* — `POST /drafts/generate` turns a radar signal into a reviewable draft, in a voice the author configures (`voice_profiles`, added here rather than in Phase 0 because nothing needed it until drafting did). Still open in this phase: the Mastodon adapter on the Go side, and the scheduling queue.
 
 **Phase 2 — Trend radar and Reddit.** Build the source pollers and `signals` store, wire them into drafting, and add the Reddit adapter once approval lands. Add account connection and selection across platforms.
 

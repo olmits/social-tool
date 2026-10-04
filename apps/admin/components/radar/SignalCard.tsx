@@ -10,9 +10,13 @@ import { TopicChip } from "./TopicChip";
 export function SignalCard({
   signal,
   now,
+  onDraft,
+  draftDisabledReason,
 }: {
   signal: SignalResponse;
   now: number;
+  onDraft: (signal: SignalResponse) => void;
+  draftDisabledReason: string | null;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4.5 hover:shadow-sm">
@@ -37,7 +41,10 @@ export function SignalCard({
       </div>
       <div className="mt-auto flex items-center gap-2.5">
         <MatchMeter score={signal.score} className="flex-1" suffix=" match" />
-        <DraftSignalButton />
+        <DraftSignalButton
+          onDraft={() => onDraft(signal)}
+          disabledReason={draftDisabledReason}
+        />
       </div>
     </div>
   );

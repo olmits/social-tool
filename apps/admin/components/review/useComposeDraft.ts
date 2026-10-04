@@ -21,6 +21,9 @@ export function useComposeDraft() {
     startTransition(async () => {
       const result = await createDraftAction({
         accountId: account.id,
+        // Hand-written, so there is no signal behind it. Drafts that do come
+        // from one are created on the Radar page, not here.
+        signalId: null,
         platform: account.platform,
         content: content.trim(),
       });

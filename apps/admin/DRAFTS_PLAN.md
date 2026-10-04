@@ -84,7 +84,7 @@ Draft statuses are UPPERCASE (`DRAFT | APPROVED | SCHEDULED | PUBLISHED | FAILED
 ## Blocked on backend — do not start until the endpoint exists
 
 - **AI generate / regenerate** (the "AI generated" badge, the inert Regenerate button, voice
-  profile) — needs the drafting slice (`DraftingService` + a generate endpoint). `POST /drafts`
+  profile) — needs the generation slice (`GenerationService` + a generate endpoint). `POST /drafts`
   only takes manual content today.
 
 ## Explicitly out of scope for the panel

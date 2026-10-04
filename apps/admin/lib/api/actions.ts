@@ -10,6 +10,7 @@ import {
   DRAFTS_TAG,
   discardDraft,
   editDraft,
+  generateDraft,
   scheduleDraft,
 } from "./drafts";
 import { toUiAccount, type UiAccount } from "./mappers";
@@ -18,11 +19,21 @@ import { createTopic, deleteTopic, TOPICS_TAG, updateTopic } from "./topics";
 import type {
   CreateDraftCommand,
   CreateTopicCommand,
+  CreateVoiceProfileCommand,
   DraftResponse,
   EditDraftCommand,
+  GenerateDraftCommand,
   TopicResponse,
   UpdateTopicCommand,
+  UpdateVoiceProfileCommand,
+  VoiceProfileResponse,
 } from "./types";
+import {
+  createVoiceProfile,
+  deleteVoiceProfile,
+  updateVoiceProfile,
+  VOICE_PROFILES_TAG,
+} from "./voiceProfiles";
 
 /** Discriminated result so client callers can render errors without an error boundary. */
 export type ActionResult<T = undefined> =
@@ -206,4 +217,67 @@ export async function deleteTopicAction(id: string): Promise<ActionResult> {
 export async function refreshSignalsAction(): Promise<ActionResult> {
   updateTag(SIGNALS_TAG);
   return { ok: true, data: undefined };
+}
+
+/**
+ * Has Claude write a draft about a signal. Unlike every other action here this
+ * one takes tens of seconds — the model reads the linked article first — so the
+ * caller must keep a pending state up for the whole transition.
+ *
+ * The API's own messages are surfaced as-is rather than switched on by status:
+ * "Voice profile X is disabled" and "Claude declined to draft a post from this
+ * signal (cyber)" already say more than a status-to-string map could.
+ */
+export async function generateDraftAction(
+  command: GenerateDraftCommand,
+): Promise<ActionResult<DraftResponse>> {
+  try {
+    const draft = await generateDraft(command);
+    updateTag(DRAFTS_TAG);
+    return { ok: true, data: draft };
+  } catch (err) {
+    return toActionError(err, "Failed to generate a draft.");
+  }
+}
+
+export async function createVoiceProfileAction(
+  command: CreateVoiceProfileCommand,
+): Promise<ActionResult<VoiceProfileResponse>> {
+  try {
+    const profile = await createVoiceProfile(command);
+    updateTag(VOICE_PROFILES_TAG);
+    return { ok: true, data: profile };
+  } catch (err) {
+    return toActionError(err, "Failed to create voice profile.");
+  }
+}
+
+/**
+ * `PATCH /voice-profiles/{id}`. A sparse patch — send only what changed: the
+ * enabled toggle sends `{ enabled }` alone, the edit form sends name and
+ * instructions.
+ */
+export async function updateVoiceProfileAction(
+  id: string,
+  command: UpdateVoiceProfileCommand,
+): Promise<ActionResult<VoiceProfileResponse>> {
+  try {
+    const profile = await updateVoiceProfile(id, command);
+    updateTag(VOICE_PROFILES_TAG);
+    return { ok: true, data: profile };
+  } catch (err) {
+    return toActionError(err, "Failed to update voice profile.");
+  }
+}
+
+export async function deleteVoiceProfileAction(
+  id: string,
+): Promise<ActionResult> {
+  try {
+    await deleteVoiceProfile(id);
+    updateTag(VOICE_PROFILES_TAG);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return toActionError(err, "Failed to delete voice profile.");
+  }
 }

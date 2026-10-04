@@ -3,6 +3,7 @@ import { SIGNAL_SOURCES } from "@/lib/api/mappers";
 import { listSignals } from "@/lib/api/signals";
 import { listTopics } from "@/lib/api/topics";
 import type { SignalSource } from "@/lib/api/types";
+import { listVoiceProfiles } from "@/lib/api/voiceProfiles";
 
 // Signals are re-polled continuously; render on demand. Reads are tag-cached
 // ("signals") so the Refresh action re-reads the store via updateTag.
@@ -29,12 +30,15 @@ export default async function RadarPage({
   const topicId = parseTopicId(params.topicId);
   const source = parseSource(params.source);
 
-  const [signals, topics] = await Promise.all([
+  // Voice profiles come along for the ride: the Draft button is disabled, with
+  // the reason on it, until there is one to write in.
+  const [signals, topics, voiceProfiles] = await Promise.all([
     listSignals({
       topicId: topicId ?? undefined,
       source: source ?? undefined,
     }),
     listTopics(),
+    listVoiceProfiles(),
   ]);
 
   // The stat tiles describe the topic you're watching, not the source chip you
@@ -49,6 +53,7 @@ export default async function RadarPage({
       signals={signals}
       statsSignals={statsSignals}
       topics={topics}
+      voiceProfiles={voiceProfiles}
       topicId={topicId}
       source={source}
       now={Date.now()}

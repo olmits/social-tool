@@ -5,9 +5,13 @@ import { SignalRow } from "./SignalRow";
 export function SignalTable({
   signals,
   now,
+  onDraft,
+  draftDisabledReason,
 }: {
   signals: SignalResponse[];
   now: number;
+  onDraft: (signal: SignalResponse) => void;
+  draftDisabledReason: string | null;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -20,7 +24,13 @@ export function SignalTable({
         <div className="w-[80px] shrink-0" />
       </div>
       {signals.map((signal) => (
-        <SignalRow key={signal.id} signal={signal} now={now} />
+        <SignalRow
+          key={signal.id}
+          signal={signal}
+          now={now}
+          onDraft={onDraft}
+          draftDisabledReason={draftDisabledReason}
+        />
       ))}
     </div>
   );

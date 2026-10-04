@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type {
   SignalResponse,
   SignalSource,
   TopicResponse,
+  VoiceProfileResponse,
 } from "@/lib/api/types";
+import { DraftFromSignalDialog } from "./DraftFromSignalDialog";
 import { RadarEmpty } from "./RadarEmpty";
 import { RadarFilters } from "./RadarFilters";
 import { RadarHeader } from "./RadarHeader";
@@ -13,6 +15,7 @@ import { RadarStats } from "./RadarStats";
 import { lastUpdatedLabel, radarEmptyReason, radarStats } from "./radarDisplay";
 import { SignalCards } from "./SignalCards";
 import { SignalTable } from "./SignalTable";
+import { useDraftFromSignal } from "./useDraftFromSignal";
 import { useRadarFilters } from "./useRadarFilters";
 
 export interface RadarViewProps {
@@ -21,6 +24,8 @@ export interface RadarViewProps {
   /** Topic-scoped but not source-scoped, so the tiles don't collapse to one source. */
   statsSignals: SignalResponse[];
   topics: TopicResponse[];
+  /** Enabled or not; the dialog filters, and the count decides the Draft button. */
+  voiceProfiles: VoiceProfileResponse[];
   topicId: string | null;
   source: SignalSource | null;
   /** Request time, so the relative ages render the same on the server and after hydration. */
@@ -31,10 +36,19 @@ export function RadarView({
   signals,
   statsSignals,
   topics,
+  voiceProfiles,
   topicId,
   source,
   now,
 }: RadarViewProps) {
+  // Mounted only while open, keyed by signal, so the dialog takes fresh state
+  // rather than the previously drafted signal's.
+  const [drafting, setDrafting] = useState<SignalResponse | null>(null);
+
+  // Only for the button's enabled state and its reason; the dialog runs its own
+  // instance of this hook for the call itself.
+  const { disabledReason } = useDraftFromSignal(voiceProfiles);
+
   const {
     query,
     setQuery,
@@ -88,17 +102,41 @@ export function RadarView({
           <>
             <div className="hidden md:block">
               {layout === "table" ? (
-                <SignalTable signals={visible} now={now} />
+                <SignalTable
+                  signals={visible}
+                  now={now}
+                  onDraft={setDrafting}
+                  draftDisabledReason={disabledReason}
+                />
               ) : (
-                <SignalCards signals={visible} now={now} />
+                <SignalCards
+                  signals={visible}
+                  now={now}
+                  onDraft={setDrafting}
+                  draftDisabledReason={disabledReason}
+                />
               )}
             </div>
             <div className="md:hidden">
-              <SignalCards signals={visible} now={now} />
+              <SignalCards
+                signals={visible}
+                now={now}
+                onDraft={setDrafting}
+                draftDisabledReason={disabledReason}
+              />
             </div>
           </>
         )}
       </div>
+
+      {drafting && (
+        <DraftFromSignalDialog
+          key={drafting.id}
+          signal={drafting}
+          voiceProfiles={voiceProfiles}
+          onClose={() => setDrafting(null)}
+        />
+      )}
     </div>
   );
 }

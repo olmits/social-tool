@@ -103,7 +103,12 @@ Two decisions differ from the plan as written, both noted at their task:
   clickable like Review's Regenerate. It is the card's primary action; one that looks live and
   does nothing on click is worse than one that says why.
 
-Only task 15 remains, still blocked on the two backend items below.
+**Task 15 is now delivered too** — the Radar's Draft button is live. Both blockers cleared:
+`generation/` exists on the API side and `CreateDraftCommand` carries `signalId`. What shipped
+differs from the sketch below in one way worth knowing: drafting needs a *voice*, which did
+not exist anywhere, so a `voice_profiles` entity and a `/voice` screen came with it. The Draft
+button is disabled, with the reason on it, until there is both a connected account and a
+voice — the same way an empty Topics list is why an empty radar is not a bug.
 
 ---
 
@@ -232,7 +237,7 @@ carries.
     | New signals (24h) | count of `createdAt` within 24h — *first* sightings, so a re-poll does not inflate it |
     | Sources active | distinct `source` values present in the list |
     | Avg match score | mean `score` |
-    | ~~Drafted today~~ | **drop it** — needs drafts carrying a `signalId`, blocked with task 15 |
+    | ~~Drafted today~~ | dropped — *was* blocked on `signalId`, which now exists; it needs a drafts fetch this page does not make, and that is the only thing left |
 
     Drop the deltas (`+6`, `all up`) with it: there is no stored previous run to compare
     against. Inventing numbers on a live page is worse than showing three tiles.
@@ -253,18 +258,11 @@ carries.
   **Fully cleared** — both halves are delivered. The poller reads `GET /topics/queries` and
   stamps every signal with its topic, so a topic-filtered view returns real rows. Nothing in
   Phases 1–4 is waiting on the backend any more, except task 15 below.
-- **Task 15, "Draft a post" from a signal — blocked twice over.** Both have to clear:
-  1. `drafting/` is still an empty package, so there is nothing that turns a signal into
-     draft text.
-  2. `CreateDraftCommand` is `(accountId, platform, content)` — **it has no `signalId`
-     field**, even though the `drafts.signal_id` column exists (`V7__signals.sql`) and
-     `DraftResponse.signalId` is already returned. So even a hand-written draft cannot record
-     which signal it came from. This is a small, independent API change and is worth asking
-     for separately from the drafting slice: it unblocks the "Drafted today" tile in task 14
-     and the provenance line in `DraftDetail.tsx:136`.
-
-  Until both land the signal card's action is inert, exactly as the Regenerate button is on
-  the Review page today.
+- ~~**Task 15, "Draft a post" from a signal — blocked twice over.**~~ **Both cleared.**
+  `generation/` is a real slice behind `POST /drafts/generate`, and `CreateDraftCommand` carries
+  `signalId`. What is still inert on the Review page is the **Regenerate** button
+  (`DraftDetail.tsx:102–121`), which is a `<button>` with no `onClick` — now trivially wirable
+  to the same action, and the obvious next small piece.
 
 ## Deferred — the reply loop (next iteration)
 

@@ -10,9 +10,13 @@ import { TopicChip } from "./TopicChip";
 export function SignalRow({
   signal,
   now,
+  onDraft,
+  draftDisabledReason,
 }: {
   signal: SignalResponse;
   now: number;
+  onDraft: (signal: SignalResponse) => void;
+  draftDisabledReason: string | null;
 }) {
   return (
     <div className="flex min-w-[760px] items-center gap-3.5 border-b border-border px-4.5 py-3.5 last:border-b-0 hover:bg-muted/30">
@@ -38,7 +42,10 @@ export function SignalRow({
         {signalAge(signal, now)}
       </div>
       <div className="flex w-[80px] shrink-0 justify-end">
-        <DraftSignalButton />
+        <DraftSignalButton
+          onDraft={() => onDraft(signal)}
+          disabledReason={draftDisabledReason}
+        />
       </div>
     </div>
   );

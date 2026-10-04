@@ -8,6 +8,7 @@ import {
   ListChecks,
   Loader2,
   LogOut,
+  MessageSquareQuote,
   Plus,
   Radar,
   Tags,
@@ -25,10 +26,16 @@ import { accountLabel, PLATFORM_META, platformLabel } from "@/lib/api/mappers";
 import type { Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// Topics first: they configure the radar, and an empty topic list is why an
-// empty radar is not a bug.
+// Configuration first: topics decide what the radar finds, voice decides how
+// drafts sound. An empty list in either is why an empty radar, or a Draft button
+// that won't click, is not a bug.
+//
+// Voice is sidebar-only — the mobile tab bar is already at five items and a
+// sixth overflows at phone width, which is a fair trade for a screen you set up
+// once and rarely reopen.
 const NAV_ITEMS = [
   { href: "/topics", label: "Topics", icon: Tags },
+  { href: "/voice", label: "Voice", icon: MessageSquareQuote },
   {
     href: "/radar",
     label: "Trend Radar",
